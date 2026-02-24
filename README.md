@@ -57,6 +57,21 @@ An **isometric tactical stealth shooter** inspired by Intravenous. Move on an is
 
 ---
 
+### 💎 [isobullet/](isobullet/)
+An **isometric bullet hell with bullet-time and bullet reflection**. Combines the isometric grid and wall mechanics of a tactical shooter with bullet-hell patterns and chronobullet's time-manipulation. Bullets bounce off walls. The player's hitscan beam reflects too — enabling ricochet shots around corners.
+
+- 1024×720 isometric grid (24×18 tiles) with 3D wall blocks
+- 6 enemy types including the **Bouncer** (fires bullets with 5+ bounces)
+- Bullet reflection: bullets ricochet off walls up to N times, creating cascading patterns
+- Reflecting beam weapon: hitscan beam bounces off walls up to 3 times for ricochet kills
+- Bullet-time with aim preview showing the full reflecting path (color-coded per bounce)
+- LOS-aware enemies: Turrets only fire when they see you; walls provide tactical cover
+- 7 bullet patterns, 7 hand-crafted waves → endless mode, graze + combo scoring
+
+**Controls:** WASD move · LMB slow time → aim ricochet → fire · RMB cancel
+
+---
+
 ## Running
 
 Install [LÖVE2D](https://love2d.org) (11.4+), then:
@@ -67,6 +82,7 @@ love bullet-hell/
 love vampire-survivors/
 love chronobullet/
 love tactical-shooter/
+love isobullet/
 ```
 
 ## Project Structure
@@ -87,17 +103,22 @@ love-2-vibe/
 │   ├── AGENTS.md
 │   ├── main.lua
 │   └── ... (14 files, ~1800 lines)
-└── tactical-shooter/     # Isometric tactical stealth shooter
+├── tactical-shooter/     # Isometric tactical stealth shooter
+│   ├── AGENTS.md
+│   ├── main.lua
+│   └── ... (9 files, ~600 lines)
+└── isobullet/            # Isometric bullet hell with reflection
     ├── AGENTS.md
+    ├── LOG.md
     ├── main.lua
-    └── ... (9 files, ~600 lines)
+    └── ... (14 files, ~2200 lines)
 ```
 
 Each game is a standalone LÖVE2D project — just point `love` at any folder. Each `AGENTS.md` provides detailed context about the game's architecture, mechanics, and codebase for AI coding agents.
 
 ## Shared Patterns
 
-All four games share common design principles despite being different genres:
+All five games share common design principles despite being different genres:
 
 - **No external assets** — all sprites generated at runtime via `love.image.newImageData()`
 - **Modular Lua files** — each system (`player`, `enemy`, `weapons`, etc.) is a separate `require()`-able module
@@ -109,5 +130,5 @@ All four games share common design principles despite being different genres:
 
 - **Language:** Lua
 - **Framework:** [LÖVE2D](https://love2d.org) 11.4
-- **Total:** ~6600 lines across 49 files
+- **Total:** ~8800 lines across 65 files
 - **Dependencies:** None
