@@ -1,48 +1,47 @@
 -- background.lua
--- Scrolling starfield background for visual depth.
+-- Infinite tiled ground with subtle colour variation so the player
+-- can perceive movement across the world plane.
 
 local Background = {}
 Background.__index = Background
 
-function Background.new(screenW, screenH)
-    local self = setmetatable({}, Background)
-    self.screenW = screenW
-    self.screenH = screenH
-    self.stars = {}
+local TILE = 64  -- tile size in pixels
 
-    -- Create several layers of stars with different speeds (parallax)
-    local layers = { { count = 40, speed = 30, size = 1, alpha = 0.3 },
-                     { count = 25, speed = 60, size = 1.5, alpha = 0.5 },
-                     { count = 15, speed = 100, size = 2, alpha = 0.7 } }
+-- Pre-compute a small palette of ground colours for variety.
+local COLOURS = {
+    { 0.12, 0.16, 0.10 },
+    { 0.14, 0.18, 0.11 },
+    { 0.11, 0.15, 0.09 },
+    { 0.13, 0.17, 0.10 },
+}
 
-    for _, layer in ipairs(layers) do
-        for i = 1, layer.count do
-            table.insert(self.stars, {
-                x = math.random() * screenW,
-                y = math.random() * screenH,
-                speed = layer.speed + math.random() * 10,
-                size = layer.size,
-                alpha = layer.alpha,
-            })
-        end
-    end
-    return self
+function Background.new()
+    return setmetatable({}, Background)
 end
 
-function Background.update(self, dt)
-    for _, s in ipairs(self.stars) do
-        s.y = s.y + s.speed * dt
-        if s.y > self.screenH then
-            s.y = s.y - self.screenH - 4
-            s.x = math.random() * self.screenW
+function Background:draw(camX, camY, screenW, screenH)
+    -- Determine the visible tile range.
+    local left   = math.floor((camX - screenW / 2) / TILE) - 1
+    local right  = math.floor((camX + screenW / 2) / TILE) + 1
+    local top    = math.floor((camY - screenH / 2) / TILE) - 1
+    local bottom = math.floor((camY + screenH / 2) / TILE) + 1
+
+    for ty = top, bottom do
+        for tx = left, right do
+            -- Deterministic colour from tile coords (cheap hash).
+            local ci = ((tx * 7 + ty * 13) % #COLOURS) + 1
+            local c  = COLOURS[ci]
+            love.graphics.setColor(c[1], c[2], c[3], 1)
+            love.graphics.rectangle("fill", tx * TILE, ty * TILE, TILE, TILE)
         end
     end
-end
 
-function Background.draw(self)
-    for _, s in ipairs(self.stars) do
-        love.graphics.setColor(0.7, 0.75, 1.0, s.alpha)
-        love.graphics.circle("fill", s.x, s.y, s.size)
+    -- Subtle grid lines
+    love.graphics.setColor(0.18, 0.22, 0.15, 0.35)
+    for ty = top, bottom do
+        for tx = left, right do
+            love.graphics.rectangle("line", tx * TILE, ty * TILE, TILE, TILE)
+        end
     end
 end
 

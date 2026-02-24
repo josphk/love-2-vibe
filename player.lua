@@ -1,218 +1,160 @@
 -- player.lua
--- Player entity: movement, shooting, invincibility frames, drawing
+-- Player entity for a Vampire-Survivors-style game.
+-- Moves freely on an infinite 2D plane.  Weapons fire automatically (see weapons.lua).
 
-local Utils = require("utils")
+local Utils   = require("utils")
+local Sprites = require("sprites")
 
 local Player = {}
 Player.__index = Player
 
 --------------------------------------------------------------------------------
--- Constants
+-- Defaults
 --------------------------------------------------------------------------------
-local SPEED           = 280   -- pixels / sec (normal)
-local FOCUS_SPEED     = 130   -- pixels / sec (focus / slow)
-local SHOOT_INTERVAL  = 0.08  -- seconds between shots
-local HITBOX_RADIUS   = 3     -- tiny hitbox (bullet hell tradition)
-local GRAZE_RADIUS    = 18    -- graze detection ring
-local SPRITE_RADIUS   = 12    -- visual size
-local INVULN_TIME     = 2.0   -- seconds of invulnerability after a hit
-local MAX_LIVES       = 3
-local BOMB_COUNT      = 3     -- screen-clearing bombs
+local BASE_SPEED    = 150
+local BASE_HP       = 100
+local HITBOX_RADIUS = 10
+local INVULN_TIME   = 1.0     -- seconds of mercy invulnerability after a hit
+local PICKUP_RANGE  = 60      -- base gem attraction radius
 
---------------------------------------------------------------------------------
--- Constructor
---------------------------------------------------------------------------------
-function Player.new(screenW, screenH)
+function Player.new()
     local self = setmetatable({}, Player)
-    self.x = screenW / 2
-    self.y = screenH * 0.85
-    self.screenW = screenW
-    self.screenH = screenH
-    self.speed = SPEED
-    self.focusSpeed = FOCUS_SPEED
+    self.x = 0
+    self.y = 0
     self.hitboxRadius = HITBOX_RADIUS
-    self.grazeRadius = GRAZE_RADIUS
-    self.spriteRadius = SPRITE_RADIUS
 
-    self.lives = MAX_LIVES
-    self.bombs = BOMB_COUNT
-    self.score = 0
-    self.graze = 0               -- graze counter (near misses)
-    self.power = 1               -- power level 1-4 (affects shot spread)
+    -- Core stats
+    self.maxHp      = BASE_HP
+    self.hp         = BASE_HP
+    self.baseSpeed  = BASE_SPEED
+    self.pickupRange = PICKUP_RANGE
 
-    self.shootTimer = 0
-    self.invulnTimer = 0         -- >0 means invulnerable
-    self.dead = false
-    self.focused = false         -- shift held = focused (slow + visible hitbox)
+    -- Multiplier stats (modified by passive upgrades)
+    self.mightMult    = 1.0   -- damage multiplier
+    self.speedMult    = 1.0
+    self.cooldownMult = 1.0   -- lower = faster weapons
+    self.areaMult     = 1.0
+    self.armor        = 0     -- flat damage reduction
+    self.recovery     = 0     -- HP regenerated per second
 
-    -- Visual flash timer
-    self.flashTimer = 0
+    -- Progression
+    self.xp       = 0
+    self.level     = 1
+    self.xpToNext  = 5
+    self.kills     = 0
+
+    -- Weapons (populated by levelup choices)
+    self.weapons = {}          -- list of weapon instances (see weapons.lua)
+    self.maxWeapons = 6
+
+    -- State
+    self.facing     = 1       -- 1 = right, -1 = left
+    self.invulnTimer = 0
+    self.age        = 0
+    self.dead       = false
 
     return self
 end
 
 --------------------------------------------------------------------------------
+-- XP & levelling
+--------------------------------------------------------------------------------
+function Player:xpNeeded()
+    return math.floor(5 + self.level ^ 1.5 * 4)
+end
+
+--- Add XP and return true if a level-up occurred.
+function Player:addXP(amount)
+    if self.dead then return false end
+    self.xp = self.xp + amount
+    if self.xp >= self.xpToNext then
+        self.xp = self.xp - self.xpToNext
+        self.level = self.level + 1
+        self.xpToNext = self:xpNeeded()
+        return true   -- caller should open level-up screen
+    end
+    return false
+end
+
+--------------------------------------------------------------------------------
 -- Update
 --------------------------------------------------------------------------------
-function Player.update(self, dt)
+function Player:update(dt)
     if self.dead then return end
+
+    self.age = self.age + dt
 
     -- Movement input
     local dx, dy = 0, 0
-    if love.keyboard.isDown("left", "a")  then dx = dx - 1 end
+    if love.keyboard.isDown("left",  "a") then dx = dx - 1 end
     if love.keyboard.isDown("right", "d") then dx = dx + 1 end
-    if love.keyboard.isDown("up", "w")    then dy = dy - 1 end
-    if love.keyboard.isDown("down", "s")  then dy = dy + 1 end
+    if love.keyboard.isDown("up",    "w") then dy = dy - 1 end
+    if love.keyboard.isDown("down",  "s") then dy = dy + 1 end
 
-    -- Normalize diagonal
+    -- Normalise diagonal
     if dx ~= 0 and dy ~= 0 then
         local inv = 1 / math.sqrt(2)
-        dx = dx * inv
-        dy = dy * inv
+        dx, dy = dx * inv, dy * inv
     end
 
-    -- Focus mode (hold left shift)
-    self.focused = love.keyboard.isDown("lshift", "rshift")
-    local spd = self.focused and self.focusSpeed or self.speed
+    -- Track facing direction (only change when moving horizontally)
+    if dx ~= 0 then self.facing = dx > 0 and 1 or -1 end
 
+    local spd = self.baseSpeed * self.speedMult
     self.x = self.x + dx * spd * dt
     self.y = self.y + dy * spd * dt
 
-    -- Keep inside screen with small margin
-    local margin = self.spriteRadius
-    self.x = Utils.clamp(self.x, margin, self.screenW - margin)
-    self.y = Utils.clamp(self.y, margin, self.screenH - margin)
-
-    -- Timers
+    -- Invulnerability
     if self.invulnTimer > 0 then
         self.invulnTimer = self.invulnTimer - dt
     end
-    if self.flashTimer > 0 then
-        self.flashTimer = self.flashTimer - dt
+
+    -- HP recovery
+    if self.recovery > 0 then
+        self.hp = math.min(self.maxHp, self.hp + self.recovery * dt)
     end
-    self.shootTimer = self.shootTimer - dt
 end
 
 --------------------------------------------------------------------------------
--- Shooting – returns a table of bullet descriptors (or nil)
+-- Take damage – returns true if the player was actually hurt.
 --------------------------------------------------------------------------------
-function Player.shoot(self)
-    if self.dead then return nil end
-    if not love.keyboard.isDown("space", "z") then return nil end
-    if self.shootTimer > 0 then return nil end
-
-    self.shootTimer = SHOOT_INTERVAL
-    local bullets = {}
-
-    -- Base shot: two parallel bullets
-    local bspeed = 800
-    table.insert(bullets, { x = self.x - 8, y = self.y - 10, vx = 0, vy = -bspeed })
-    table.insert(bullets, { x = self.x + 8, y = self.y - 10, vx = 0, vy = -bspeed })
-
-    -- Power >= 2: add angled side shots
-    if self.power >= 2 then
-        local ang = 0.12
-        table.insert(bullets, { x = self.x - 14, y = self.y - 6,
-            vx = -math.sin(ang) * bspeed, vy = -math.cos(ang) * bspeed })
-        table.insert(bullets, { x = self.x + 14, y = self.y - 6,
-            vx =  math.sin(ang) * bspeed, vy = -math.cos(ang) * bspeed })
-    end
-
-    -- Power >= 3: wider spread
-    if self.power >= 3 then
-        local ang = 0.25
-        table.insert(bullets, { x = self.x - 20, y = self.y - 2,
-            vx = -math.sin(ang) * bspeed, vy = -math.cos(ang) * bspeed })
-        table.insert(bullets, { x = self.x + 20, y = self.y - 2,
-            vx =  math.sin(ang) * bspeed, vy = -math.cos(ang) * bspeed })
-    end
-
-    -- Power 4: homing side missiles (approximated with angled shots)
-    if self.power >= 4 then
-        local ang = 0.40
-        table.insert(bullets, { x = self.x - 26, y = self.y,
-            vx = -math.sin(ang) * bspeed * 0.9, vy = -math.cos(ang) * bspeed * 0.9 })
-        table.insert(bullets, { x = self.x + 26, y = self.y,
-            vx =  math.sin(ang) * bspeed * 0.9, vy = -math.cos(ang) * bspeed * 0.9 })
-    end
-
-    return bullets
-end
-
---------------------------------------------------------------------------------
--- Take damage – returns true if the player actually got hit
---------------------------------------------------------------------------------
-function Player.hit(self)
+function Player:hit(rawDamage)
     if self.dead then return false end
     if self.invulnTimer > 0 then return false end
 
-    self.lives = self.lives - 1
+    local dmg = math.max(1, rawDamage - self.armor)
+    self.hp = self.hp - dmg
     self.invulnTimer = INVULN_TIME
-    self.flashTimer = INVULN_TIME
-
-    if self.lives <= 0 then
+    if self.hp <= 0 then
+        self.hp = 0
         self.dead = true
     end
-
-    -- Reset position on hit
-    self.x = self.screenW / 2
-    self.y = self.screenH * 0.85
-
     return true
 end
 
---------------------------------------------------------------------------------
--- Bomb – clears screen, returns true if a bomb was used
---------------------------------------------------------------------------------
-function Player.bomb(self)
-    if self.dead then return false end
-    if self.bombs <= 0 then return false end
-    self.bombs = self.bombs - 1
-    self.invulnTimer = math.max(self.invulnTimer, 1.5) -- brief invuln with bomb
-    return true
+--- Heal the player.
+function Player:heal(amount)
+    self.hp = math.min(self.maxHp, self.hp + amount)
 end
 
 --------------------------------------------------------------------------------
--- Draw
+-- Draw  (call inside camera transform)
 --------------------------------------------------------------------------------
-function Player.draw(self)
+function Player:draw()
     if self.dead then return end
 
     -- Flicker during invulnerability
-    if self.invulnTimer > 0 then
-        if math.floor(self.invulnTimer * 15) % 2 == 0 then
-            return -- skip frame for flicker effect
-        end
+    if self.invulnTimer > 0 and math.floor(self.invulnTimer * 12) % 2 == 0 then
+        return
     end
 
-    -- Ship body (triangle)
-    love.graphics.setColor(0.3, 0.7, 1.0, 1)
-    local r = self.spriteRadius
-    love.graphics.polygon("fill",
-        self.x, self.y - r * 1.4,
-        self.x - r, self.y + r,
-        self.x + r, self.y + r
-    )
+    love.graphics.setColor(1, 1, 1, 1)
+    Sprites.draw("player", self.x, self.y, self.age, self.facing, false)
 
-    -- Ship highlight
-    love.graphics.setColor(0.6, 0.9, 1.0, 1)
-    love.graphics.polygon("line",
-        self.x, self.y - r * 1.4,
-        self.x - r, self.y + r,
-        self.x + r, self.y + r
-    )
-
-    -- Engine glow
-    love.graphics.setColor(1, 0.6, 0.2, 0.8)
-    love.graphics.circle("fill", self.x, self.y + r + 2, 4 + math.random() * 2)
-
-    -- Hitbox indicator (visible in focus mode)
-    if self.focused then
-        love.graphics.setColor(1, 1, 1, 0.9)
-        love.graphics.circle("fill", self.x, self.y, self.hitboxRadius)
-        love.graphics.setColor(1, 1, 1, 0.25)
-        love.graphics.circle("line", self.x, self.y, self.grazeRadius)
-    end
+    -- Pickup range ring (subtle)
+    local pr = self.pickupRange * self.areaMult
+    love.graphics.setColor(0.4, 0.8, 1.0, 0.08)
+    love.graphics.circle("line", self.x, self.y, pr)
 end
 
 return Player

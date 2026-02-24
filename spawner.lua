@@ -1,241 +1,124 @@
 -- spawner.lua
--- Wave-based enemy spawner with escalating difficulty.
+-- Time-based enemy wave spawner with escalating difficulty.
+-- Enemies spawn outside the camera view and walk inward.
 
 local Enemy = require("enemy")
+local Utils = require("utils")
 
 local Spawner = {}
 Spawner.__index = Spawner
 
 --------------------------------------------------------------------------------
--- Wave definitions
--- Each wave is a list of spawn entries:
---   { time = <seconds into wave>, type = "<enemy type>", x = <x pos> | "random" }
--- After all predefined waves, an endless procedural mode kicks in.
+-- Difficulty tiers — which enemy types unlock at what game-time (seconds)
 --------------------------------------------------------------------------------
-
-local WAVES = {
-    -- Wave 1: gentle introduction – a few drones
-    {
-        duration = 10,
-        spawns = {
-            { time = 0.5, type = "drone", x = 120 },
-            { time = 1.0, type = "drone", x = 360 },
-            { time = 2.5, type = "drone", x = 240 },
-            { time = 4.0, type = "drone", x = 100 },
-            { time = 4.0, type = "drone", x = 380 },
-            { time = 6.0, type = "drone", x = 200 },
-            { time = 6.5, type = "drone", x = 280 },
-        },
-    },
-    -- Wave 2: spinners + drones
-    {
-        duration = 14,
-        spawns = {
-            { time = 0.0, type = "spinner", x = 240 },
-            { time = 1.0, type = "drone",   x = 80  },
-            { time = 1.5, type = "drone",   x = 400 },
-            { time = 3.0, type = "spinner", x = 140 },
-            { time = 3.0, type = "spinner", x = 340 },
-            { time = 5.0, type = "drone",   x = 200 },
-            { time = 5.5, type = "drone",   x = 300 },
-            { time = 7.0, type = "weaver",  x = 240 },
-            { time = 9.0, type = "drone",   x = 120 },
-            { time = 9.0, type = "drone",   x = 360 },
-        },
-    },
-    -- Wave 3: turrets
-    {
-        duration = 16,
-        spawns = {
-            { time = 0.0, type = "turret",  x = 160 },
-            { time = 0.0, type = "turret",  x = 320 },
-            { time = 3.0, type = "drone",   x = 80  },
-            { time = 3.5, type = "drone",   x = 400 },
-            { time = 5.0, type = "weaver",  x = 240 },
-            { time = 7.0, type = "spinner", x = 100 },
-            { time = 7.0, type = "spinner", x = 380 },
-            { time = 10.0,type = "drone",   x = 200 },
-            { time = 10.0,type = "drone",   x = 280 },
-        },
-    },
-    -- Wave 4: heavy enemy introduction
-    {
-        duration = 18,
-        spawns = {
-            { time = 0.0, type = "heavy",   x = 240 },
-            { time = 2.0, type = "drone",   x = 100 },
-            { time = 2.0, type = "drone",   x = 380 },
-            { time = 4.0, type = "weaver",  x = 160 },
-            { time = 4.0, type = "weaver",  x = 320 },
-            { time = 7.0, type = "spinner", x = 240 },
-            { time = 9.0, type = "drone",   x = 120 },
-            { time = 9.0, type = "drone",   x = 360 },
-            { time = 11.0,type = "turret",  x = 240 },
-            { time = 13.0,type = "drone",   x = 200 },
-            { time = 13.0,type = "drone",   x = 300 },
-        },
-    },
-    -- Wave 5: everything
-    {
-        duration = 22,
-        spawns = {
-            { time = 0.0, type = "turret",  x = 120 },
-            { time = 0.0, type = "turret",  x = 360 },
-            { time = 1.0, type = "spinner", x = 240 },
-            { time = 3.0, type = "heavy",   x = 200 },
-            { time = 3.0, type = "weaver",  x = 380 },
-            { time = 5.0, type = "drone",   x = 80  },
-            { time = 5.0, type = "drone",   x = 400 },
-            { time = 7.0, type = "weaver",  x = 140 },
-            { time = 7.0, type = "weaver",  x = 340 },
-            { time = 10.0,type = "heavy",   x = 300 },
-            { time = 12.0,type = "spinner", x = 100 },
-            { time = 12.0,type = "spinner", x = 380 },
-            { time = 14.0,type = "drone",   x = 200 },
-            { time = 14.0,type = "drone",   x = 280 },
-            { time = 16.0,type = "turret",  x = 240 },
-        },
-    },
+local TIERS = {
+    { time =   0, types = { "bat" } },
+    { time =  30, types = { "fly" } },
+    { time =  60, types = { "zombie" } },
+    { time = 120, types = { "skeleton" } },
+    { time = 180, types = { "ghost" } },
+    { time = 300, types = { "golem" } },
 }
 
---------------------------------------------------------------------------------
--- Constructor
---------------------------------------------------------------------------------
-function Spawner.new(screenW, screenH)
+function Spawner.new()
     local self = setmetatable({}, Spawner)
-    self.screenW = screenW
-    self.screenH = screenH
-    self.wave = 0
-    self.waveTimer = 0
-    self.spawnIndex = 0
-    self.currentWave = nil
     self.enemies = {}
-    self.betweenWaves = true
-    self.betweenTimer = 2.0   -- delay before first wave
-    self.endless = false
-    self.endlessTimer = 0
-    self.difficulty = 1       -- scales with waves cleared
+    self.gameTime = 0         -- total elapsed seconds
+    self.spawnTimer = 0
+    self.difficulty = 1.0     -- multiplier applied to enemy HP/damage
+    self.spawnRate  = 0.8     -- enemies per second (increases over time)
     return self
 end
 
 --------------------------------------------------------------------------------
--- Start next wave
+-- Determine which enemy types are currently available.
 --------------------------------------------------------------------------------
-function Spawner.nextWave(self)
-    self.wave = self.wave + 1
-    self.waveTimer = 0
-    self.spawnIndex = 1
-    self.difficulty = 1 + (self.wave - 1) * 0.15
-
-    if self.wave <= #WAVES then
-        self.currentWave = WAVES[self.wave]
-        self.endless = false
-    else
-        self.currentWave = nil
-        self.endless = true
-        self.endlessTimer = 0
+function Spawner:availableTypes()
+    local types = {}
+    for _, tier in ipairs(TIERS) do
+        if self.gameTime >= tier.time then
+            for _, t in ipairs(tier.types) do
+                table.insert(types, t)
+            end
+        end
     end
+    return types
+end
 
-    self.betweenWaves = false
+--------------------------------------------------------------------------------
+-- Pick a random spawn position outside the camera view.
+--------------------------------------------------------------------------------
+local function spawnPosition(camX, camY, screenW, screenH)
+    local margin = 80
+    local side = math.random(4)
+    local x, y
+    if side == 1 then      -- top
+        x = camX + (math.random() - 0.5) * (screenW + margin * 2)
+        y = camY - screenH / 2 - margin
+    elseif side == 2 then  -- bottom
+        x = camX + (math.random() - 0.5) * (screenW + margin * 2)
+        y = camY + screenH / 2 + margin
+    elseif side == 3 then  -- left
+        x = camX - screenW / 2 - margin
+        y = camY + (math.random() - 0.5) * (screenH + margin * 2)
+    else                   -- right
+        x = camX + screenW / 2 + margin
+        y = camY + (math.random() - 0.5) * (screenH + margin * 2)
+    end
+    return x, y
 end
 
 --------------------------------------------------------------------------------
 -- Update
 --------------------------------------------------------------------------------
-function Spawner.update(self, dt, bulletPool, playerX, playerY)
-    -- Between-waves pause
-    if self.betweenWaves then
-        self.betweenTimer = self.betweenTimer - dt
-        if self.betweenTimer <= 0 then
-            self:nextWave()
-        end
-        -- Still update existing enemies
-        self:updateEnemies(dt, bulletPool, playerX, playerY)
-        return
+function Spawner:update(dt, playerX, playerY, camX, camY, screenW, screenH)
+    self.gameTime = self.gameTime + dt
+
+    -- Scale difficulty and spawn rate with time
+    self.difficulty = 1.0 + self.gameTime * 0.005          -- +50 % every 100 s
+    self.spawnRate  = 0.8 + self.gameTime * 0.012          -- ramps up
+
+    -- Spawn timer
+    self.spawnTimer = self.spawnTimer + dt * self.spawnRate
+    while self.spawnTimer >= 1 do
+        self.spawnTimer = self.spawnTimer - 1
+
+        local types = self:availableTypes()
+        local typeName = types[math.random(#types)]
+        local sx, sy = spawnPosition(camX, camY, screenW, screenH)
+        local e = Enemy.new(typeName, sx, sy, self.difficulty)
+        table.insert(self.enemies, e)
     end
 
-    self.waveTimer = self.waveTimer + dt
-
-    -- Scripted wave spawning
-    if self.currentWave then
-        while self.spawnIndex <= #self.currentWave.spawns do
-            local entry = self.currentWave.spawns[self.spawnIndex]
-            if self.waveTimer >= entry.time then
-                local ex = entry.x
-                if ex == "random" then
-                    ex = 40 + math.random() * (self.screenW - 80)
-                end
-                local e = Enemy.new(entry.type, ex, -30, self.screenW, self.screenH)
-                table.insert(self.enemies, e)
-                self.spawnIndex = self.spawnIndex + 1
-            else
-                break
-            end
-        end
-
-        -- Check if wave is over (all spawned and all dead)
-        if self.spawnIndex > #self.currentWave.spawns then
-            local allDead = true
-            for _, e in ipairs(self.enemies) do
-                if not e.dead then allDead = false; break end
-            end
-            if allDead or self.waveTimer > self.currentWave.duration + 5 then
-                self.betweenWaves = true
-                self.betweenTimer = 3.0
-            end
+    -- Occasional swarm burst (every ~20 s, spawn a cluster of 8-15 flies/bats)
+    if self.gameTime > 20 and math.random() < dt * 0.04 then
+        local burstType = self.gameTime > 30 and "fly" or "bat"
+        local count = math.random(8, 15)
+        local cx, cy = spawnPosition(camX, camY, screenW, screenH)
+        for _ = 1, count do
+            local ox = (math.random() - 0.5) * 60
+            local oy = (math.random() - 0.5) * 60
+            table.insert(self.enemies, Enemy.new(burstType, cx + ox, cy + oy, self.difficulty))
         end
     end
 
-    -- Endless mode: procedural spawning
-    if self.endless then
-        self.endlessTimer = self.endlessTimer - dt
-        if self.endlessTimer <= 0 then
-            local interval = math.max(0.5, 2.5 - self.difficulty * 0.15)
-            self.endlessTimer = interval
-            local etype = Enemy.TYPES[math.random(#Enemy.TYPES)]
-            local ex = 40 + math.random() * (self.screenW - 80)
-            local e = Enemy.new(etype, ex, -30, self.screenW, self.screenH)
-            -- Scale HP with difficulty
-            e.hp = math.floor(e.hp * self.difficulty)
-            e.maxHp = e.hp
-            table.insert(self.enemies, e)
-        end
-        self.difficulty = self.difficulty + dt * 0.01
-    end
-
-    self:updateEnemies(dt, bulletPool, playerX, playerY)
-end
-
---------------------------------------------------------------------------------
--- Update all enemies, sweep dead
---------------------------------------------------------------------------------
-function Spawner.updateEnemies(self, dt, bulletPool, playerX, playerY)
+    -- Update all enemies
     for _, e in ipairs(self.enemies) do
         if not e.dead then
-            e:update(dt, bulletPool, playerX, playerY)
+            e:update(dt, playerX, playerY)
         end
     end
-    -- Periodic cleanup
-    if #self.enemies > 30 then
-        local j = 1
-        for i = 1, #self.enemies do
-            if not self.enemies[i].dead then
-                if i ~= j then
-                    self.enemies[j] = self.enemies[i]
-                    self.enemies[i] = nil
-                end
-                j = j + 1
-            else
-                self.enemies[i] = nil
-            end
-        end
+
+    -- Sweep dead enemies periodically
+    if #self.enemies > 200 then
+        Utils.sweep(self.enemies)
     end
 end
 
 --------------------------------------------------------------------------------
 -- Draw
 --------------------------------------------------------------------------------
-function Spawner.draw(self)
+function Spawner:draw()
     for _, e in ipairs(self.enemies) do
         if not e.dead then
             e:draw()

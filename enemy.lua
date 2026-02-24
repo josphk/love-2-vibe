@@ -1,196 +1,136 @@
 -- enemy.lua
--- Enemy entities: multiple types with distinct behaviour and bullet patterns.
+-- Enemy entities for a Vampire-Survivors-style game.
+-- Enemies swarm toward the player.  No bullet patterns — they deal contact damage.
 
-local Utils    = require("utils")
-local Patterns = require("patterns")
-local Sprites  = require("sprites")
+local Utils   = require("utils")
+local Sprites = require("sprites")
 
 local Enemy = {}
 Enemy.__index = Enemy
 
 --------------------------------------------------------------------------------
 -- Enemy type definitions
--- Each type specifies: hp, radius, speed, color, pattern schedule
+-- Fields: hp, radius, speed, damage, score, xp, sprite, r/g/b (for particles)
 --------------------------------------------------------------------------------
 local DEFS = {}
 
--- Type 1: DRONE – drifts down, fires aimed bursts
-DEFS.drone = {
-    hp = 8, radius = 14,
+DEFS.bat = {
+    hp = 8, radius = 10, speed = 110, damage = 5,
+    score = 10, xp = 1,
+    sprite = "bat",
     r = 0.9, g = 0.3, b = 0.2,
-    speed = 60,
-    score = 100,
-    pattern = function(self, pool, px, py)
-        Patterns.aimedBurst(pool, self, px, py, { count = 5, speed = 200 })
-    end,
-    fireInterval = 1.2,
-    moveFunc = function(self, dt)
-        self.y = self.y + self.speed * dt
-    end,
 }
 
--- Type 2: SPINNER – hovers and fires spirals
-DEFS.spinner = {
-    hp = 20, radius = 18,
-    r = 0.3, g = 0.9, b = 0.4,
-    speed = 30,
-    score = 250,
-    pattern = function(self, pool, px, py)
-        Patterns.spiral(pool, self, px, py, {
-            arms = 4, speed = 130, offset = self.age * 2.5
-        })
-    end,
-    fireInterval = 0.12,
-    moveFunc = function(self, dt)
-        -- Drift to a hover-y, then sway side to side
-        if self.y < self.targetY then
-            self.y = self.y + 80 * dt
-        end
-        self.x = self.x + math.sin(self.age * 1.2) * 60 * dt
-    end,
+DEFS.zombie = {
+    hp = 20, radius = 12, speed = 45, damage = 10,
+    score = 20, xp = 2,
+    sprite = "zombie",
+    r = 0.4, g = 0.7, b = 0.3,
 }
 
--- Type 3: TURRET – stationary, fires radial bursts and crosses
-DEFS.turret = {
-    hp = 35, radius = 20,
-    r = 0.8, g = 0.8, b = 0.2,
-    speed = 0,
-    score = 400,
-    pattern = function(self, pool, px, py)
-        if self.patternPhase % 2 == 0 then
-            Patterns.radialBurst(pool, self, px, py, {
-                count = 20, speed = 140, offset = self.age * 0.5
-            })
-        else
-            Patterns.cross(pool, self, px, py, {
-                speed = 200, offset = self.age * 0.8
-            })
-        end
-        self.patternPhase = (self.patternPhase or 0) + 1
-    end,
-    fireInterval = 0.8,
-    moveFunc = function(self, dt)
-        if self.y < self.targetY then
-            self.y = self.y + 60 * dt
-        end
-    end,
+DEFS.skeleton = {
+    hp = 30, radius = 12, speed = 65, damage = 12,
+    score = 35, xp = 3,
+    sprite = "skeleton",
+    r = 0.85, g = 0.85, b = 0.8,
 }
 
--- Type 4: WEAVER – fast, fires wave bullets
-DEFS.weaver = {
-    hp = 12, radius = 12,
-    r = 0.4, g = 0.4, b = 1.0,
-    speed = 100,
-    score = 200,
-    pattern = function(self, pool, px, py)
-        Patterns.wave(pool, self, px, py, { count = 5, speed = 160, freq = 6, amp = 100 })
-    end,
-    fireInterval = 1.5,
-    moveFunc = function(self, dt)
-        self.y = self.y + self.speed * 0.5 * dt
-        self.x = self.x + math.cos(self.age * 2.0) * self.speed * dt
-    end,
+DEFS.ghost = {
+    hp = 18, radius = 11, speed = 80, damage = 8,
+    score = 30, xp = 2,
+    sprite = "ghost",
+    r = 0.7, g = 0.75, b = 0.95,
 }
 
--- Type 5: HEAVY – big, lots of HP, fires expanding rings + shotgun
-DEFS.heavy = {
-    hp = 60, radius = 26,
-    r = 0.7, g = 0.2, b = 0.7,
-    speed = 25,
-    score = 600,
-    pattern = function(self, pool, px, py)
-        if self.patternPhase % 3 == 0 then
-            Patterns.expandingRing(pool, self, px, py, { count = 28, speed = 30, accel = 120 })
-        elseif self.patternPhase % 3 == 1 then
-            Patterns.shotgun(pool, self, px, py, { count = 14, speed = 200 })
-        else
-            Patterns.spinSpiral(pool, self, px, py, {
-                arms = 6, speed = 100, spin = 2.0, offset = self.age
-            })
-        end
-        self.patternPhase = (self.patternPhase or 0) + 1
-    end,
-    fireInterval = 1.0,
-    moveFunc = function(self, dt)
-        if self.y < self.targetY then
-            self.y = self.y + 40 * dt
-        end
-        self.x = self.x + math.sin(self.age * 0.7) * 30 * dt
-    end,
+DEFS.golem = {
+    hp = 120, radius = 20, speed = 30, damage = 25,
+    score = 100, xp = 10,
+    sprite = "golem",
+    r = 0.6, g = 0.5, b = 0.35,
+}
+
+DEFS.fly = {
+    hp = 5, radius = 6, speed = 140, damage = 3,
+    score = 5, xp = 1,
+    sprite = "fly",
+    r = 0.55, g = 0.3, b = 0.65,
 }
 
 --------------------------------------------------------------------------------
 -- Constructor
 --------------------------------------------------------------------------------
-function Enemy.new(typeName, x, y, screenW, screenH)
+function Enemy.new(typeName, x, y, diffMult)
     local def = DEFS[typeName]
     assert(def, "Unknown enemy type: " .. tostring(typeName))
+    diffMult = diffMult or 1
 
     local self = setmetatable({}, Enemy)
     self.typeName = typeName
     self.x = x
     self.y = y
-    self.screenW = screenW
-    self.screenH = screenH
 
-    self.hp     = def.hp
-    self.maxHp  = def.hp
-    self.radius = def.radius
-    self.speed  = def.speed
-    self.score  = def.score
+    self.hp       = math.floor(def.hp * diffMult)
+    self.maxHp    = self.hp
+    self.radius   = def.radius
+    self.speed    = def.speed * (0.9 + math.random() * 0.2) -- slight variance
+    self.damage   = math.floor(def.damage * math.max(1, diffMult * 0.6))
+    self.score    = def.score
+    self.xp       = def.xp
+    self.sprite   = def.sprite
     self.r, self.g, self.b = def.r, def.g, def.b
 
-    self.patternFunc   = def.pattern
-    self.fireInterval  = def.fireInterval
-    self.moveFunc      = def.moveFunc
-    self.fireTimer     = def.fireInterval * 0.5  -- offset initial fire
-    self.patternPhase  = 0
+    self.age       = 0
+    self.facing    = 1
+    self.dead      = false
 
-    self.age = 0
-    self.hitFlash = 0                         -- damage flash timer
-    self.targetY = 60 + math.random() * 140   -- hover line for stationary types
-    self.dead = false
-    self.offscreen = false  -- flagged when below screen (cleanup, no score)
+    -- Knockback state
+    self.kbVx = 0
+    self.kbVy = 0
+    self.kbTimer = 0
+
+    -- Damage flash
+    self.hitFlash = 0
+
+    -- Contact damage cooldown (so the player isn't hit every frame)
+    self.contactTimer = 0
 
     return self
 end
 
 --------------------------------------------------------------------------------
--- Update
+-- Update — chase the player
 --------------------------------------------------------------------------------
-function Enemy.update(self, dt, bulletPool, playerX, playerY)
+function Enemy:update(dt, playerX, playerY)
     if self.dead then return end
-
     self.age = self.age + dt
     if self.hitFlash > 0 then self.hitFlash = self.hitFlash - dt end
+    if self.contactTimer > 0 then self.contactTimer = self.contactTimer - dt end
 
-    -- Movement
-    self.moveFunc(self, dt)
-
-    -- Clamp X to screen
-    self.x = Utils.clamp(self.x, self.radius, self.screenW - self.radius)
-
-    -- Fire pattern
-    self.fireTimer = self.fireTimer - dt
-    if self.fireTimer <= 0 and self.y > 0 and self.y < self.screenH * 0.85 then
-        self.fireTimer = self.fireInterval
-        self.patternFunc(self, bulletPool, playerX, playerY)
+    -- Knockback
+    if self.kbTimer > 0 then
+        self.kbTimer = self.kbTimer - dt
+        self.x = self.x + self.kbVx * dt
+        self.y = self.y + self.kbVy * dt
+        return  -- skip normal movement during knockback
     end
 
-    -- Mark as offscreen if way below
-    if self.y > self.screenH + 80 then
-        self.dead = true
-        self.offscreen = true
-    end
+    -- Move toward player
+    local angle = Utils.angleTo(self.x, self.y, playerX, playerY)
+    self.x = self.x + math.cos(angle) * self.speed * dt
+    self.y = self.y + math.sin(angle) * self.speed * dt
+
+    -- Facing
+    if playerX < self.x then self.facing = -1
+    elseif playerX > self.x then self.facing = 1 end
 end
 
 --------------------------------------------------------------------------------
--- Take damage – returns true if killed
+-- Take damage — returns true if killed.
 --------------------------------------------------------------------------------
-function Enemy.takeDamage(self, dmg)
+function Enemy:takeDamage(dmg)
     if self.dead then return false end
     self.hp = self.hp - dmg
-    self.hitFlash = 0.12  -- brief white flash
+    self.hitFlash = 0.10
     if self.hp <= 0 then
         self.dead = true
         return true
@@ -198,42 +138,43 @@ function Enemy.takeDamage(self, dmg)
     return false
 end
 
+--- Apply knockback impulse.
+function Enemy:applyKnockback(fromX, fromY, force)
+    local a = Utils.angleTo(fromX, fromY, self.x, self.y)
+    self.kbVx = math.cos(a) * force
+    self.kbVy = math.sin(a) * force
+    self.kbTimer = 0.15
+end
+
 --------------------------------------------------------------------------------
--- Draw
+-- Draw (inside camera transform)
 --------------------------------------------------------------------------------
-function Enemy.draw(self)
+function Enemy:draw()
     if self.dead then return end
 
-    -- Determine if we should show a damage flash (brief white flash on hit)
-    local flash = false
-    if self.hitFlash and self.hitFlash > 0 then
-        flash = math.floor(self.hitFlash * 20) % 2 == 0
-    end
-
-    -- Draw the pixel-art sprite
+    local flash = self.hitFlash > 0
     love.graphics.setColor(1, 1, 1, 1)
-    Sprites.draw(self.typeName, self.x, self.y, self.age, flash)
+    Sprites.draw(self.sprite, self.x, self.y, self.age, self.facing, flash)
 
-    -- Health bar (if damaged)
+    -- Health bar (only when damaged)
     if self.hp < self.maxHp then
-        local sw, sh = Sprites.getSize(self.typeName)
+        local sw, sh = Sprites.getSize(self.sprite)
         local barW = math.max(sw, self.radius * 2)
-        local barH = 3
+        local barH = 2
         local bx = self.x - barW / 2
-        local by = self.y - sh / 2 - 6
-        love.graphics.setColor(0.3, 0.3, 0.3, 0.8)
+        local by = self.y - sh / 2 - 5
+        love.graphics.setColor(0.2, 0.2, 0.2, 0.7)
         love.graphics.rectangle("fill", bx, by, barW, barH)
-        love.graphics.setColor(0.2, 1.0, 0.2, 0.9)
+        love.graphics.setColor(0.15, 0.85, 0.15, 0.9)
         love.graphics.rectangle("fill", bx, by, barW * (self.hp / self.maxHp), barH)
     end
 end
 
 --------------------------------------------------------------------------------
--- Expose type names for spawner
+-- Expose type list for the spawner
 --------------------------------------------------------------------------------
 Enemy.TYPES = {}
-for k in pairs(DEFS) do
-    table.insert(Enemy.TYPES, k)
-end
+for k in pairs(DEFS) do table.insert(Enemy.TYPES, k) end
+table.sort(Enemy.TYPES)  -- deterministic order
 
 return Enemy

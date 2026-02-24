@@ -1,209 +1,137 @@
 -- main.lua
--- Bullet Hell – a classic-style bullet hell game built with LÖVE2D.
+-- Survivor — a Vampire Survivors-style roguelite built with LÖVE2D.
 --
 -- Controls:
---   Arrow keys / WASD    Move
---   Space / Z             Shoot
---   Left Shift            Focus (slow movement, visible hitbox)
---   X                     Bomb (clears all enemy bullets)
---   R                     Restart (after game over)
---   Escape                Quit
+--   Arrow keys / WASD   Move
+--   1 / 2 / 3           Choose upgrade on level-up
+--   R                    Restart after game over
+--   Escape               Quit
 --
--- The game features 5 hand-crafted waves followed by an endless procedural mode
--- with steadily increasing difficulty.
+-- Weapons fire automatically.  Kill enemies to collect XP gems, level up,
+-- and choose new weapons or upgrades.  Survive as long as you can!
 
 local Player     = require("player")
-local BulletPool = require("bullet")
 local Spawner    = require("spawner")
+local Weapons    = require("weapons")
+local Gems       = require("gems")
+local LevelUp    = require("levelup")
+local Camera     = require("camera")
 local Particles  = require("particles")
 local Background = require("background")
 local HUD        = require("hud")
-local Utils      = require("utils")
 local Sprites    = require("sprites")
+local Utils      = require("utils")
 
 --------------------------------------------------------------------------------
 -- Game state
 --------------------------------------------------------------------------------
 local SCREEN_W, SCREEN_H
-local player
-local bullets
-local spawner
-local particles
-local background
-
-local gameOver      = false
-local bombFlash     = 0        -- screen flash timer for bomb effect
-local shakeTimer    = 0        -- screen shake
-local shakeAmount   = 0
-local powerItems    = {}       -- dropped power-up items
+local player, spawner, gems, particles, camera, background, levelUp
+local gameOver = false
+local shakeTimer, shakeAmount = 0, 0
 
 --------------------------------------------------------------------------------
--- Initialise / reset the game
+-- Init / reset
 --------------------------------------------------------------------------------
 local function resetGame()
-    player     = Player.new(SCREEN_W, SCREEN_H)
-    bullets    = BulletPool.new(SCREEN_W, SCREEN_H)
-    spawner    = Spawner.new(SCREEN_W, SCREEN_H)
+    player     = Player.new()
+    spawner    = Spawner.new()
+    gems       = Gems.new()
     particles  = Particles.new()
-    powerItems = {}
+    camera     = Camera.new(SCREEN_W, SCREEN_H)
+    levelUp    = LevelUp.new()
+    Weapons.projectiles = {}
     gameOver   = false
-    bombFlash  = 0
     shakeTimer = 0
+
+    -- Player starts with the Magic Wand
+    table.insert(player.weapons, Weapons.create("wand"))
 end
 
---------------------------------------------------------------------------------
--- LÖVE callbacks
---------------------------------------------------------------------------------
-
 function love.load()
-    -- Smooth rendering
     love.graphics.setDefaultFilter("linear", "linear")
-
     SCREEN_W = love.graphics.getWidth()
     SCREEN_H = love.graphics.getHeight()
-
-    -- Seed RNG
     math.randomseed(os.time())
-
-    -- Use a clean default font at a readable size
     love.graphics.setFont(love.graphics.newFont(14))
-
-    -- Build pixel-art alien sprites
+    background = Background.new()
     Sprites.load()
-
-    background = Background.new(SCREEN_W, SCREEN_H)
     resetGame()
 end
 
+--------------------------------------------------------------------------------
+-- Input
+--------------------------------------------------------------------------------
 function love.keypressed(key)
-    if key == "escape" then
-        love.event.quit()
-    end
+    if key == "escape" then love.event.quit() end
 
-    -- Bomb
-    if (key == "x") and not gameOver then
-        if player:bomb() then
-            -- Clear all enemy bullets, grant brief invuln
-            bullets:clearEnemy()
-            bombFlash = 0.5
-            shakeTimer = 0.3
-            shakeAmount = 6
-            -- Award score for grazed bullets
-            player.score = player.score + bullets:countEnemy() * 10
-        end
+    -- Level-up choice
+    if levelUp.active then
+        levelUp:keypressed(key, player)
+        return
     end
 
     -- Restart
-    if key == "r" and gameOver then
-        resetGame()
-    end
+    if key == "r" and gameOver then resetGame() end
 end
 
 --------------------------------------------------------------------------------
 -- Update
 --------------------------------------------------------------------------------
 function love.update(dt)
-    -- Cap dt to prevent spiral of death
     dt = math.min(dt, 1 / 30)
 
-    background:update(dt)
+    -- Camera always updates (smooth follow even during pause)
+    camera:update(dt, player.x, player.y)
 
+    -- Paused states
     if gameOver then return end
+    if levelUp.active then return end
 
-    -- Player
+    -- Player movement
     player:update(dt)
 
-    -- Player shooting
-    local newBullets = player:shoot()
-    if newBullets then
-        for _, b in ipairs(newBullets) do
-            bullets:spawnPlayer(b)
+    -- Weapon auto-fire
+    Weapons.updatePlayer(player, spawner.enemies, dt)
+
+    -- Weapon projectiles vs enemies
+    Weapons.updateProjectiles(dt, player, spawner.enemies, particles)
+
+    -- Enemy spawner
+    spawner:update(dt, player.x, player.y, camera.x, camera.y, SCREEN_W, SCREEN_H)
+
+    -- Gems
+    local xpGained, healed = gems:update(dt, player)
+    if healed > 0 then
+        player:heal(healed)
+        particles:floatingText(player.x, player.y - 20, "+" .. healed .. " HP", 0.2, 1, 0.4)
+    end
+    if xpGained > 0 then
+        if player:addXP(xpGained) then
+            levelUp:open(player)
         end
     end
-
-    -- Enemies
-    spawner:update(dt, bullets, player.x, player.y)
-
-    -- Bullets
-    bullets:update(dt)
 
     -- Particles
     particles:update(dt)
 
-    -- Power items
-    for i = #powerItems, 1, -1 do
-        local item = powerItems[i]
-        item.y = item.y + 80 * dt
-        item.age = item.age + dt
-        -- Attract to player when close
-        local dist = Utils.distance(item.x, item.y, player.x, player.y)
-        if dist < 60 or player.focused and dist < 120 then
-            local angle = Utils.angleTo(item.x, item.y, player.x, player.y)
-            item.x = item.x + math.cos(angle) * 300 * dt
-            item.y = item.y + math.sin(angle) * 300 * dt
-        end
-        -- Collect
-        if dist < 20 then
-            player.power = math.min(4, player.power + 1)
-            player.score = player.score + 50
-            table.remove(powerItems, i)
-        elseif item.y > SCREEN_H + 30 then
-            table.remove(powerItems, i)
-        end
-    end
-
     -- Timers
-    if bombFlash > 0 then bombFlash = bombFlash - dt end
     if shakeTimer > 0 then shakeTimer = shakeTimer - dt end
 
     ---------------------------------------------------------------------------
-    -- COLLISION DETECTION
+    -- Enemy contact damage vs player
     ---------------------------------------------------------------------------
-
-    -- Player bullets vs enemies
-    for _, b in ipairs(bullets.player) do
-        if not b.dead then
-            for _, e in ipairs(spawner.enemies) do
-                if not e.dead and Utils.circlesOverlap(b.x, b.y, b.radius, e.x, e.y, e.radius) then
-                    b.dead = true
-                    particles:spark(b.x, b.y, 0.5, 0.8, 1.0)
-                    local killed = e:takeDamage(b.damage or 1)
-                    if killed then
-                        player.score = player.score + e.score
-                        particles:explode(e.x, e.y, e.r, e.g, e.b, 20, 150)
-                        shakeTimer = 0.15
-                        shakeAmount = 4
-                        -- Chance to drop power item
-                        if math.random() < 0.3 and player.power < 4 then
-                            table.insert(powerItems, {
-                                x = e.x, y = e.y, age = 0
-                            })
-                        end
-                    end
-                    break
-                end
-            end
-        end
-    end
-
-    -- Enemy bullets vs player
     if not player.dead and player.invulnTimer <= 0 then
-        for _, b in ipairs(bullets.enemy) do
-            if not b.dead then
-                -- Graze detection (near miss)
-                if not b.grazed and Utils.circlesOverlap(player.x, player.y, player.grazeRadius, b.x, b.y, b.radius) then
-                    b.grazed = true
-                    player.graze = player.graze + 1
-                    player.score = player.score + 25
-                end
-
-                -- Actual hit (tiny hitbox)
-                if Utils.circlesOverlap(player.x, player.y, player.hitboxRadius, b.x, b.y, b.radius) then
-                    if player:hit() then
-                        particles:explode(player.x, player.y, 0.3, 0.7, 1.0, 30, 200)
-                        shakeTimer = 0.3
-                        shakeAmount = 8
-                        bullets:clearEnemy()  -- mercy clear on death
+        for _, e in ipairs(spawner.enemies) do
+            if not e.dead and e.contactTimer <= 0 then
+                if Utils.circlesOverlap(player.x, player.y, player.hitboxRadius,
+                                        e.x, e.y, e.radius) then
+                    if player:hit(e.damage) then
+                        particles:explode(player.x, player.y, 1, 0.4, 0.3, 15, 100)
+                        particles:damageNumber(player.x, player.y - 16, e.damage, 1, 0.3, 0.2)
+                        shakeTimer = 0.2
+                        shakeAmount = 5
+                        e.contactTimer = 0.5   -- cooldown before this enemy can hit again
                         if player.dead then
                             gameOver = true
                         end
@@ -214,21 +142,19 @@ function love.update(dt)
         end
     end
 
-    -- Enemy bodies vs player (contact damage)
-    if not player.dead and player.invulnTimer <= 0 then
-        for _, e in ipairs(spawner.enemies) do
-            if not e.dead and Utils.circlesOverlap(player.x, player.y, player.hitboxRadius, e.x, e.y, e.radius) then
-                if player:hit() then
-                    particles:explode(player.x, player.y, 1, 0.5, 0.2, 25, 180)
-                    shakeTimer = 0.3
-                    shakeAmount = 8
-                    bullets:clearEnemy()
-                    if player.dead then
-                        gameOver = true
-                    end
-                end
-                break
+    ---------------------------------------------------------------------------
+    -- Check killed enemies → spawn gems
+    ---------------------------------------------------------------------------
+    for _, e in ipairs(spawner.enemies) do
+        if e.dead and not e.looted then
+            e.looted = true
+            player.kills = player.kills + 1
+            gems:spawn(e.x, e.y, e.xp)
+            -- Small chance to drop health
+            if math.random() < 0.05 then
+                gems:spawnHealth(e.x, e.y, 15)
             end
+            particles:explode(e.x, e.y, e.r, e.g, e.b, 10, 80)
         end
     end
 end
@@ -237,71 +163,64 @@ end
 -- Draw
 --------------------------------------------------------------------------------
 function love.draw()
-    -- Screen shake offset
+    -- Screen shake
     local sx, sy = 0, 0
     if shakeTimer > 0 then
         sx = (math.random() - 0.5) * shakeAmount * 2
         sy = (math.random() - 0.5) * shakeAmount * 2
     end
+
     love.graphics.push()
     love.graphics.translate(sx, sy)
 
-    -- Dark background
-    love.graphics.clear(0.02, 0.02, 0.08, 1)
-    background:draw()
+    ---- World-space drawing (inside camera) ----
+    love.graphics.clear(0.05, 0.06, 0.04, 1)
+    background:draw(camera.x, camera.y, SCREEN_W, SCREEN_H)
 
-    -- Play-field border
-    love.graphics.setColor(0.15, 0.15, 0.3, 0.8)
-    love.graphics.rectangle("line", 0, 0, SCREEN_W, SCREEN_H)
+    camera:push()
 
-    -- Power items
-    for _, item in ipairs(powerItems) do
-        local pulse = 0.7 + 0.3 * math.sin(item.age * 8)
-        love.graphics.setColor(1, 0.4, 0.2, pulse)
-        love.graphics.circle("fill", item.x, item.y, 6)
-        love.graphics.setColor(1, 0.9, 0.5, pulse)
-        love.graphics.circle("fill", item.x, item.y, 3)
-    end
+    -- Gems (under entities)
+    gems:draw()
 
     -- Enemies
     spawner:draw()
 
-    -- Bullets
-    bullets:draw()
+    -- Weapon projectiles
+    Weapons.drawProjectiles()
 
     -- Player
     player:draw()
 
-    -- Particles (on top)
+    -- Particles (world-space)
     particles:draw()
+
+    camera:pop()
 
     love.graphics.pop()
 
-    -- Bomb flash overlay
-    if bombFlash > 0 then
-        love.graphics.setColor(1, 1, 1, bombFlash * 0.6)
-        love.graphics.rectangle("fill", 0, 0, SCREEN_W, SCREEN_H)
-    end
-
-    -- HUD (not affected by shake)
-    HUD.draw(player, spawner, bullets, SCREEN_W, SCREEN_H)
+    ---- Screen-space UI ----
+    HUD.draw(player, spawner, SCREEN_W, SCREEN_H)
+    levelUp:draw(SCREEN_W, SCREEN_H)
 
     -- Game over overlay
     if gameOver then
         love.graphics.setColor(0, 0, 0, 0.6)
         love.graphics.rectangle("fill", 0, 0, SCREEN_W, SCREEN_H)
 
-        love.graphics.setColor(1, 0.2, 0.2, 1)
-        local goText = "GAME OVER"
         local font = love.graphics.getFont()
-        love.graphics.print(goText, (SCREEN_W - font:getWidth(goText)) / 2, SCREEN_H / 2 - 30)
+        love.graphics.setColor(1, 0.2, 0.2, 1)
+        local t1 = "YOU DIED"
+        love.graphics.print(t1, (SCREEN_W - font:getWidth(t1)) / 2, SCREEN_H / 2 - 50)
 
-        love.graphics.setColor(1, 1, 1, 0.8)
-        local scoreText = string.format("Final Score: %d", player.score)
-        love.graphics.print(scoreText, (SCREEN_W - font:getWidth(scoreText)) / 2, SCREEN_H / 2)
+        love.graphics.setColor(1, 1, 1, 0.9)
+        local t2 = string.format("Survived  %02d:%02d", math.floor(spawner.gameTime / 60), math.floor(spawner.gameTime % 60))
+        love.graphics.print(t2, (SCREEN_W - font:getWidth(t2)) / 2, SCREEN_H / 2 - 20)
 
-        love.graphics.setColor(0.7, 0.7, 0.7, 0.6 + 0.4 * math.sin(love.timer.getTime() * 3))
-        local restartText = "Press R to restart"
-        love.graphics.print(restartText, (SCREEN_W - font:getWidth(restartText)) / 2, SCREEN_H / 2 + 30)
+        local t3 = string.format("Level %d  —  Kills %d", player.level, player.kills)
+        love.graphics.print(t3, (SCREEN_W - font:getWidth(t3)) / 2, SCREEN_H / 2 + 5)
+
+        love.graphics.setColor(0.7, 0.7, 0.7, 0.5 + 0.4 * math.sin(love.timer.getTime() * 3))
+        local t4 = "Press R to restart"
+        love.graphics.print(t4, (SCREEN_W - font:getWidth(t4)) / 2, SCREEN_H / 2 + 40)
     end
 end
