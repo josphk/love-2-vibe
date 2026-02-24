@@ -175,9 +175,11 @@ function love.draw()
 
     ---- World-space drawing (inside camera) ----
     love.graphics.clear(0.05, 0.06, 0.04, 1)
-    background:draw(camera.x, camera.y, SCREEN_W, SCREEN_H)
 
     camera:push()
+
+    -- Background tiles (drawn first, inside camera transform)
+    background:draw(camera.x, camera.y, SCREEN_W, SCREEN_H)
 
     -- Gems (under entities)
     gems:draw()
