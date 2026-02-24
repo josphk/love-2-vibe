@@ -1,239 +1,257 @@
 -- enemy.lua
--- Enemy entities: multiple types with distinct behaviour and bullet patterns.
+-- Arena enemies that fire bullet patterns.
+-- Each type has a shape (drawn geometrically), movement, and pattern schedule.
 
 local Utils    = require("utils")
 local Patterns = require("patterns")
-local Sprites  = require("sprites")
 
 local Enemy = {}
 Enemy.__index = Enemy
 
 --------------------------------------------------------------------------------
--- Enemy type definitions
--- Each type specifies: hp, radius, speed, color, pattern schedule
+-- Type definitions
 --------------------------------------------------------------------------------
 local DEFS = {}
 
--- Type 1: DRONE – drifts down, fires aimed bursts
-DEFS.drone = {
-    hp = 8, radius = 14,
-    r = 0.9, g = 0.3, b = 0.2,
-    speed = 60,
-    score = 100,
-    pattern = function(self, pool, px, py)
-        Patterns.aimedBurst(pool, self, px, py, { count = 5, speed = 200 })
-    end,
-    fireInterval = 1.2,
-    moveFunc = function(self, dt)
-        self.y = self.y + self.speed * dt
-    end,
-}
-
--- Type 2: SPINNER – hovers and fires spirals
-DEFS.spinner = {
-    hp = 20, radius = 18,
-    r = 0.3, g = 0.9, b = 0.4,
-    speed = 30,
-    score = 250,
-    pattern = function(self, pool, px, py)
-        Patterns.spiral(pool, self, px, py, {
-            arms = 4, speed = 130, offset = self.age * 2.5
-        })
-    end,
-    fireInterval = 0.12,
-    moveFunc = function(self, dt)
-        -- Drift to a hover-y, then sway side to side
-        if self.y < self.targetY then
-            self.y = self.y + 80 * dt
-        end
-        self.x = self.x + math.sin(self.age * 1.2) * 60 * dt
-    end,
-}
-
--- Type 3: TURRET – stationary, fires radial bursts and crosses
+-- TURRET: stationary, aimed bursts
 DEFS.turret = {
-    hp = 35, radius = 20,
-    r = 0.8, g = 0.8, b = 0.2,
-    speed = 0,
-    score = 400,
+    hp = 30, radius = 16, score = 200,
+    cr = 1.0, cg = 0.55, cb = 0.15,
+    fireInterval = 1.8,
+    shape = "diamond",
     pattern = function(self, pool, px, py)
-        if self.patternPhase % 2 == 0 then
-            Patterns.radialBurst(pool, self, px, py, {
-                count = 20, speed = 140, offset = self.age * 0.5
-            })
-        else
-            Patterns.cross(pool, self, px, py, {
-                speed = 200, offset = self.age * 0.8
-            })
-        end
-        self.patternPhase = (self.patternPhase or 0) + 1
+        Patterns.aimedBurst(pool, self, px, py, { count = 5, speed = 180, spread = 0.4 })
     end,
-    fireInterval = 0.8,
-    moveFunc = function(self, dt)
-        if self.y < self.targetY then
-            self.y = self.y + 60 * dt
+    move = function(self, dt) end,  -- stationary
+}
+
+-- SPINNER: rotating spiral arms
+DEFS.spinner = {
+    hp = 50, radius = 18, score = 350,
+    cr = 0.3, cg = 0.95, cb = 0.4,
+    fireInterval = 0.10,
+    shape = "circle",
+    pattern = function(self, pool, px, py)
+        Patterns.spiral(pool, self, { arms = 3, speed = 110, offset = self.age * 2.8 })
+    end,
+    move = function(self, dt)
+        -- Gentle drift toward target position
+        if self.targetX then
+            self.x = Utils.lerp(self.x, self.targetX, dt * 0.8)
+            self.y = Utils.lerp(self.y, self.targetY, dt * 0.8)
         end
     end,
 }
 
--- Type 4: WEAVER – fast, fires wave bullets
-DEFS.weaver = {
-    hp = 12, radius = 12,
-    r = 0.4, g = 0.4, b = 1.0,
-    speed = 100,
-    score = 200,
-    pattern = function(self, pool, px, py)
-        Patterns.wave(pool, self, px, py, { count = 5, speed = 160, freq = 6, amp = 100 })
-    end,
+-- ORBITER: moves in a circle, radial bursts
+DEFS.orbiter = {
+    hp = 25, radius = 14, score = 250,
+    cr = 0.3, cg = 0.5, cb = 1.0,
     fireInterval = 1.5,
-    moveFunc = function(self, dt)
-        self.y = self.y + self.speed * 0.5 * dt
-        self.x = self.x + math.cos(self.age * 2.0) * self.speed * dt
+    shape = "circle",
+    pattern = function(self, pool, px, py)
+        Patterns.radialBurst(pool, self, { count = 16, speed = 130, offset = self.age })
+    end,
+    move = function(self, dt)
+        local cx = self.orbitCX or 400
+        local cy = self.orbitCY or 300
+        local r  = self.orbitR  or 120
+        self.orbitAngle = (self.orbitAngle or 0) + dt * 1.2
+        self.x = cx + math.cos(self.orbitAngle) * r
+        self.y = cy + math.sin(self.orbitAngle) * r
     end,
 }
 
--- Type 5: HEAVY – big, lots of HP, fires expanding rings + shotgun
+-- HEAVY: slow-moving, expanding rings + shotgun
 DEFS.heavy = {
-    hp = 60, radius = 26,
-    r = 0.7, g = 0.2, b = 0.7,
-    speed = 25,
-    score = 600,
+    hp = 80, radius = 24, score = 500,
+    cr = 0.75, cg = 0.25, cb = 0.85,
+    fireInterval = 1.4,
+    shape = "hexagon",
     pattern = function(self, pool, px, py)
-        if self.patternPhase % 3 == 0 then
-            Patterns.expandingRing(pool, self, px, py, { count = 28, speed = 30, accel = 120 })
-        elseif self.patternPhase % 3 == 1 then
-            Patterns.shotgun(pool, self, px, py, { count = 14, speed = 200 })
+        if self.phase % 3 == 0 then
+            Patterns.expandRing(pool, self, { count = 24, speed = 25, accel = 100 })
+        elseif self.phase % 3 == 1 then
+            Patterns.shotgun(pool, self, px, py, { count = 12, speed = 190 })
         else
-            Patterns.spinSpiral(pool, self, px, py, {
-                arms = 6, speed = 100, spin = 2.0, offset = self.age
-            })
+            Patterns.spinSpiral(pool, self, { arms = 5, speed = 90, spin = 2.0, offset = self.age })
         end
-        self.patternPhase = (self.patternPhase or 0) + 1
+        self.phase = self.phase + 1
     end,
-    fireInterval = 1.0,
-    moveFunc = function(self, dt)
-        if self.y < self.targetY then
-            self.y = self.y + 40 * dt
+    move = function(self, dt)
+        if self.targetX then
+            self.x = Utils.lerp(self.x, self.targetX, dt * 0.3)
+            self.y = Utils.lerp(self.y, self.targetY, dt * 0.3)
         end
-        self.x = self.x + math.sin(self.age * 0.7) * 30 * dt
+    end,
+}
+
+-- DASHER: fast, stops briefly to fire, then dashes again
+DEFS.dasher = {
+    hp = 20, radius = 12, score = 300,
+    cr = 0.2, cg = 0.9, cb = 0.95,
+    fireInterval = 0.7,
+    shape = "triangle",
+    pattern = function(self, pool, px, py)
+        Patterns.aimedBurst(pool, self, px, py, { count = 7, speed = 210, spread = 0.5 })
+    end,
+    move = function(self, dt)
+        self.dashTimer = (self.dashTimer or 0) - dt
+        if self.dashTimer <= 0 then
+            -- Pick new dash target
+            local A = require("background").ARENA
+            self.targetX = A.x + 60 + math.random() * (A.w - 120)
+            self.targetY = A.y + 60 + math.random() * (A.h - 120)
+            self.dashTimer = 1.5 + math.random() * 1.0
+        end
+        if self.targetX then
+            local dx = self.targetX - self.x
+            local dy = self.targetY - self.y
+            local dist = math.sqrt(dx * dx + dy * dy)
+            if dist > 5 then
+                local speed = 250
+                self.x = self.x + (dx / dist) * speed * dt
+                self.y = self.y + (dy / dist) * speed * dt
+            end
+        end
     end,
 }
 
 --------------------------------------------------------------------------------
 -- Constructor
 --------------------------------------------------------------------------------
-function Enemy.new(typeName, x, y, screenW, screenH)
+function Enemy.new(typeName, x, y)
     local def = DEFS[typeName]
-    assert(def, "Unknown enemy type: " .. tostring(typeName))
-
+    assert(def, "Unknown enemy: " .. tostring(typeName))
     local self = setmetatable({}, Enemy)
     self.typeName = typeName
-    self.x = x
-    self.y = y
-    self.screenW = screenW
-    self.screenH = screenH
-
-    self.hp     = def.hp
-    self.maxHp  = def.hp
+    self.x, self.y = x, y
+    self.hp = def.hp
+    self.maxHp = def.hp
     self.radius = def.radius
-    self.speed  = def.speed
-    self.score  = def.score
-    self.r, self.g, self.b = def.r, def.g, def.b
-
-    self.patternFunc   = def.pattern
-    self.fireInterval  = def.fireInterval
-    self.moveFunc      = def.moveFunc
-    self.fireTimer     = def.fireInterval * 0.5  -- offset initial fire
-    self.patternPhase  = 0
-
+    self.score = def.score
+    self.cr, self.cg, self.cb = def.cr, def.cg, def.cb
+    self.shape = def.shape
+    self.patternFunc = def.pattern
+    self.moveFunc = def.move
+    self.fireInterval = def.fireInterval
+    self.fireTimer = def.fireInterval * (0.3 + math.random() * 0.5)
+    self.phase = 0
     self.age = 0
-    self.hitFlash = 0                         -- damage flash timer
-    self.targetY = 60 + math.random() * 140   -- hover line for stationary types
     self.dead = false
-    self.offscreen = false  -- flagged when below screen (cleanup, no score)
+    self.hitFlash = 0
+
+    -- Movement state
+    self.targetX, self.targetY = nil, nil
+    self.orbitCX, self.orbitCY = nil, nil
+    self.orbitR = nil
+    self.orbitAngle = math.random() * math.pi * 2
+    self.dashTimer = 0
 
     return self
 end
 
---------------------------------------------------------------------------------
--- Update
---------------------------------------------------------------------------------
-function Enemy.update(self, dt, bulletPool, playerX, playerY)
+function Enemy:update(dt, bulletPool, playerX, playerY, arena)
     if self.dead then return end
-
     self.age = self.age + dt
     if self.hitFlash > 0 then self.hitFlash = self.hitFlash - dt end
 
     -- Movement
     self.moveFunc(self, dt)
 
-    -- Clamp X to screen
-    self.x = Utils.clamp(self.x, self.radius, self.screenW - self.radius)
+    -- Clamp to arena
+    self.x = Utils.clamp(self.x, arena.x + self.radius, arena.x + arena.w - self.radius)
+    self.y = Utils.clamp(self.y, arena.y + self.radius, arena.y + arena.h - self.radius)
 
     -- Fire pattern
     self.fireTimer = self.fireTimer - dt
-    if self.fireTimer <= 0 and self.y > 0 and self.y < self.screenH * 0.85 then
+    if self.fireTimer <= 0 then
         self.fireTimer = self.fireInterval
         self.patternFunc(self, bulletPool, playerX, playerY)
     end
-
-    -- Mark as offscreen if way below
-    if self.y > self.screenH + 80 then
-        self.dead = true
-        self.offscreen = true
-    end
 end
 
---------------------------------------------------------------------------------
--- Take damage – returns true if killed
---------------------------------------------------------------------------------
-function Enemy.takeDamage(self, dmg)
+function Enemy:takeDamage(dmg)
     if self.dead then return false end
     self.hp = self.hp - dmg
-    self.hitFlash = 0.12  -- brief white flash
-    if self.hp <= 0 then
-        self.dead = true
-        return true
-    end
+    self.hitFlash = 0.12
+    if self.hp <= 0 then self.dead = true; return true end
     return false
 end
 
---------------------------------------------------------------------------------
--- Draw
---------------------------------------------------------------------------------
-function Enemy.draw(self)
+function Enemy:draw()
     if self.dead then return end
 
-    -- Determine if we should show a damage flash (brief white flash on hit)
-    local flash = false
-    if self.hitFlash and self.hitFlash > 0 then
-        flash = math.floor(self.hitFlash * 20) % 2 == 0
+    local flash = self.hitFlash > 0
+    local r, g, b = self.cr, self.cg, self.cb
+    if flash then r, g, b = 1, 1, 1 end
+
+    -- Shadow
+    love.graphics.setColor(0, 0, 0, 0.3)
+    love.graphics.ellipse("fill", self.x, self.y + self.radius * 0.6, self.radius * 0.9, self.radius * 0.35)
+
+    -- Shape
+    local rad = self.radius
+    if self.shape == "diamond" then
+        love.graphics.setColor(r, g, b, 0.9)
+        love.graphics.polygon("fill",
+            self.x, self.y - rad,
+            self.x + rad, self.y,
+            self.x, self.y + rad,
+            self.x - rad, self.y)
+        love.graphics.setColor(1, 1, 1, 0.3)
+        love.graphics.polygon("line",
+            self.x, self.y - rad,
+            self.x + rad, self.y,
+            self.x, self.y + rad,
+            self.x - rad, self.y)
+    elseif self.shape == "circle" then
+        love.graphics.setColor(r, g, b, 0.85)
+        love.graphics.circle("fill", self.x, self.y, rad)
+        love.graphics.setColor(1, 1, 1, 0.3)
+        love.graphics.circle("line", self.x, self.y, rad)
+    elseif self.shape == "hexagon" then
+        local pts = {}
+        for i = 0, 5 do
+            local a = (i / 6) * math.pi * 2 - math.pi / 6
+            table.insert(pts, self.x + math.cos(a) * rad)
+            table.insert(pts, self.y + math.sin(a) * rad)
+        end
+        love.graphics.setColor(r, g, b, 0.85)
+        love.graphics.polygon("fill", pts)
+        love.graphics.setColor(1, 1, 1, 0.3)
+        love.graphics.polygon("line", pts)
+    elseif self.shape == "triangle" then
+        love.graphics.setColor(r, g, b, 0.9)
+        love.graphics.polygon("fill",
+            self.x, self.y - rad,
+            self.x + rad * 0.86, self.y + rad * 0.5,
+            self.x - rad * 0.86, self.y + rad * 0.5)
+        love.graphics.setColor(1, 1, 1, 0.3)
+        love.graphics.polygon("line",
+            self.x, self.y - rad,
+            self.x + rad * 0.86, self.y + rad * 0.5,
+            self.x - rad * 0.86, self.y + rad * 0.5)
     end
 
-    -- Draw the pixel-art sprite
-    love.graphics.setColor(1, 1, 1, 1)
-    Sprites.draw(self.typeName, self.x, self.y, self.age, flash)
+    -- Inner glow
+    love.graphics.setColor(1, 1, 1, 0.4)
+    love.graphics.circle("fill", self.x, self.y, rad * 0.25)
 
-    -- Health bar (if damaged)
+    -- HP bar
     if self.hp < self.maxHp then
-        local sw, sh = Sprites.getSize(self.typeName)
-        local barW = math.max(sw, self.radius * 2)
-        local barH = 3
-        local bx = self.x - barW / 2
-        local by = self.y - sh / 2 - 6
-        love.graphics.setColor(0.3, 0.3, 0.3, 0.8)
-        love.graphics.rectangle("fill", bx, by, barW, barH)
-        love.graphics.setColor(0.2, 1.0, 0.2, 0.9)
-        love.graphics.rectangle("fill", bx, by, barW * (self.hp / self.maxHp), barH)
+        local bw = rad * 2
+        local bx = self.x - bw / 2
+        local by = self.y - rad - 8
+        love.graphics.setColor(0.2, 0.2, 0.2, 0.7)
+        love.graphics.rectangle("fill", bx, by, bw, 3)
+        love.graphics.setColor(0.2, 1, 0.2, 0.9)
+        love.graphics.rectangle("fill", bx, by, bw * (self.hp / self.maxHp), 3)
     end
 end
 
---------------------------------------------------------------------------------
--- Expose type names for spawner
---------------------------------------------------------------------------------
 Enemy.TYPES = {}
-for k in pairs(DEFS) do
-    table.insert(Enemy.TYPES, k)
-end
+for k in pairs(DEFS) do table.insert(Enemy.TYPES, k) end
+table.sort(Enemy.TYPES)
 
 return Enemy

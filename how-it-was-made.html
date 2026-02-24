@@ -1,0 +1,1190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How We Built a Vampire Survivors Clone in LÖVE2D</title>
+<style>
+  /* ── Reset & base ──────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: #0e1117;
+    color: #c9d1d9;
+    line-height: 1.72;
+    font-size: 17px;
+  }
+  a { color: #58a6ff; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* ── Layout ────────────────────────────────────────────── */
+  .container { max-width: 860px; margin: 0 auto; padding: 0 24px 80px; }
+  header {
+    text-align: center;
+    padding: 64px 0 40px;
+    border-bottom: 1px solid #21262d;
+    margin-bottom: 48px;
+  }
+  header h1 {
+    font-size: 2.6rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, #79c0ff, #d2a8ff, #f778ba);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    line-height: 1.2;
+  }
+  header p { color: #8b949e; margin-top: 12px; font-size: 1.1rem; }
+  h2 {
+    font-size: 1.65rem;
+    font-weight: 700;
+    color: #e6edf3;
+    margin: 56px 0 20px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #21262d;
+  }
+  h3 {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #d2a8ff;
+    margin: 32px 0 12px;
+  }
+  p, li { margin-bottom: 12px; }
+  ul, ol { padding-left: 24px; }
+
+  /* ── SVG diagrams ──────────────────────────────────────── */
+  .diagram {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 10px;
+    padding: 20px;
+    margin: 24px 0;
+    overflow-x: auto;
+    text-align: center;
+  }
+  .diagram svg { max-width: 100%; height: auto; }
+  .diagram-caption {
+    color: #8b949e;
+    font-size: 0.88rem;
+    margin-top: 10px;
+    font-style: italic;
+  }
+
+  /* ── Code blocks ───────────────────────────────────────── */
+  pre {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    padding: 18px 20px;
+    overflow-x: auto;
+    font-size: 0.92rem;
+    line-height: 1.55;
+    margin: 16px 0;
+  }
+  code {
+    font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+    font-size: 0.92em;
+  }
+  p code, li code {
+    background: #1c2128;
+    padding: 2px 7px;
+    border-radius: 4px;
+    color: #79c0ff;
+    font-size: 0.88em;
+  }
+  .kw  { color: #ff7b72; }   /* keyword */
+  .fn  { color: #d2a8ff; }   /* function */
+  .str { color: #a5d6ff; }   /* string */
+  .cm  { color: #8b949e; }   /* comment */
+  .num { color: #79c0ff; }   /* number */
+  .op  { color: #c9d1d9; }   /* operator */
+
+  /* ── Callout boxes ─────────────────────────────────────── */
+  .callout {
+    border-left: 4px solid #58a6ff;
+    background: #161b22;
+    padding: 16px 20px;
+    border-radius: 0 8px 8px 0;
+    margin: 20px 0;
+  }
+  .callout.tip   { border-color: #3fb950; }
+  .callout.warn  { border-color: #d29922; }
+  .callout strong { color: #e6edf3; }
+
+  /* ── File tree ─────────────────────────────────────────── */
+  .file-tree {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    padding: 18px 24px;
+    font-family: monospace;
+    font-size: 0.93rem;
+    line-height: 1.7;
+    margin: 16px 0;
+    color: #c9d1d9;
+  }
+  .file-tree .dir  { color: #79c0ff; }
+  .file-tree .file { color: #e6edf3; }
+  .file-tree .desc { color: #8b949e; }
+
+  /* ── Table of contents ─────────────────────────────────── */
+  .toc {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 10px;
+    padding: 24px 28px;
+    margin: 24px 0 40px;
+  }
+  .toc h3 { margin: 0 0 12px; color: #e6edf3; font-size: 1.05rem; }
+  .toc ol { list-style: decimal; padding-left: 20px; }
+  .toc li { margin-bottom: 6px; font-size: 0.95rem; }
+
+  /* ── Pixel art showcase ────────────────────────────────── */
+  .pixel-grid {
+    display: inline-grid;
+    gap: 1px;
+    background: #21262d;
+    padding: 2px;
+    border-radius: 4px;
+    margin: 8px 12px;
+    image-rendering: pixelated;
+  }
+  .pixel-grid .cell {
+    width: 8px;
+    height: 8px;
+    border-radius: 1px;
+  }
+
+  /* ── Responsive ────────────────────────────────────────── */
+  @media (max-width: 600px) {
+    header h1 { font-size: 1.8rem; }
+    h2 { font-size: 1.3rem; }
+    body { font-size: 15px; }
+    .container { padding: 0 14px 40px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<header>
+  <h1>How We Built a Vampire Survivors Clone in LÖVE2D</h1>
+  <p>A complete beginner's walkthrough — from blank folder to playable roguelite.<br>
+  ~2 300 lines of Lua, zero external assets, one afternoon.</p>
+</header>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<nav class="toc">
+  <h3>Table of Contents</h3>
+  <ol>
+    <li><a href="#what">What is LÖVE2D?</a></li>
+    <li><a href="#design">The Game at a Glance</a></li>
+    <li><a href="#architecture">Architecture — How the Files Connect</a></li>
+    <li><a href="#gameloop">The Game Loop</a></li>
+    <li><a href="#camera">The Camera System</a></li>
+    <li><a href="#player">The Player</a></li>
+    <li><a href="#enemies">Enemies &amp; Spawning</a></li>
+    <li><a href="#weapons">The Auto-Weapon System</a></li>
+    <li><a href="#collision">Collision Detection</a></li>
+    <li><a href="#xp">XP, Gems &amp; Levelling Up</a></li>
+    <li><a href="#sprites">Pixel Art Without Image Files</a></li>
+    <li><a href="#juice">Juice — Particles, Shake &amp; Numbers</a></li>
+    <li><a href="#hud">The Heads-Up Display</a></li>
+    <li><a href="#files">File-by-File Reference</a></li>
+    <li><a href="#running">Running the Game Yourself</a></li>
+  </ol>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="what">1. What is LÖVE2D?</h2>
+<p><a href="https://love2d.org" target="_blank">LÖVE2D</a> (often written "Love2D") is a free, open-source <strong>2D game framework</strong> for the <strong>Lua</strong> programming language. You write <code>.lua</code> files, drop them in a folder, and LÖVE runs them — no build step, no compiler, no engine editor. It's the fastest way to go from idea to playable game.</p>
+
+<div class="callout tip">
+  <strong>Why LÖVE for beginners?</strong> It gives you just three callback functions to fill in — <code>love.load()</code>, <code>love.update(dt)</code>, and <code>love.draw()</code> — and handles the window, input, and rendering for you.
+</div>
+
+<p>Every LÖVE game lives in a folder with at least one file: <code>main.lua</code>. When you run <code>love myfolder/</code>, the engine looks for that file and starts calling your callbacks.</p>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="design">2. The Game at a Glance</h2>
+<p>Our game is inspired by <em>Vampire Survivors</em>: you control a character on an infinite 2D field. Enemies swarm toward you from every direction. Your weapons fire <strong>automatically</strong>. Killed enemies drop XP gems; collect enough and you <strong>level up</strong>, choosing a new weapon or upgrade. The goal: survive as long as you can.</p>
+
+<div class="diagram">
+<svg viewBox="0 0 760 340" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, sans-serif">
+  <!-- background -->
+  <rect width="760" height="340" rx="8" fill="#0d1117"/>
+
+  <!-- field -->
+  <rect x="30" y="30" width="460" height="280" rx="6" fill="#161b22" stroke="#30363d"/>
+  <text x="260" y="22" fill="#8b949e" font-size="11" text-anchor="middle">GAME WORLD (infinite)</text>
+
+  <!-- grid lines on field -->
+  <g stroke="#21262d" stroke-width="0.5">
+    <line x1="30" y1="100" x2="490" y2="100"/>
+    <line x1="30" y1="170" x2="490" y2="170"/>
+    <line x1="30" y1="240" x2="490" y2="240"/>
+    <line x1="145" y1="30" x2="145" y2="310"/>
+    <line x1="260" y1="30" x2="260" y2="310"/>
+    <line x1="375" y1="30" x2="375" y2="310"/>
+  </g>
+
+  <!-- player -->
+  <polygon points="260,155 250,175 270,175" fill="#5988e8" stroke="#8ab4f8" stroke-width="1.5"/>
+  <text x="260" y="190" fill="#8ab4f8" font-size="10" text-anchor="middle">Player</text>
+
+  <!-- enemies coming from edges -->
+  <circle cx="65" cy="80" r="8" fill="#d44" opacity="0.9"/><text x="65" y="73" fill="#f88" font-size="8" text-anchor="middle">bat</text>
+  <circle cx="440" cy="260" r="10" fill="#4a4" opacity="0.9"/><text x="440" y="253" fill="#6d6" font-size="8" text-anchor="middle">zombie</text>
+  <circle cx="130" cy="270" r="7" fill="#66f" opacity="0.9"/><text x="130" y="263" fill="#99f" font-size="8" text-anchor="middle">ghost</text>
+  <circle cx="400" cy="70" r="6" fill="#a4a" opacity="0.9"/>
+
+  <!-- arrows showing chase -->
+  <g stroke="#8b949e" stroke-width="1" marker-end="url(#arrowGrey)" opacity="0.6">
+    <line x1="80" y1="90" x2="230" y2="152"/>
+    <line x1="420" y1="250" x2="285" y2="172"/>
+    <line x1="145" y1="260" x2="240" y2="178"/>
+    <line x1="390" y1="78" x2="280" y2="148"/>
+  </g>
+
+  <!-- weapon effects -->
+  <circle cx="260" cy="165" r="45" fill="none" stroke="#6f6" stroke-width="1.2" stroke-dasharray="4 3" opacity="0.5"/>
+  <text x="310" y="210" fill="#6f6" font-size="9" opacity="0.7">garlic aura</text>
+  <circle cx="205" cy="140" r="4" fill="#58a6ff"/><circle cx="198" cy="130" r="4" fill="#58a6ff"/>
+  <text x="185" y="122" fill="#58a6ff" font-size="9">wand bolts</text>
+
+  <!-- gems -->
+  <rect x="380" y="200" width="6" height="6" fill="#55f" transform="rotate(45 383 203)"/>
+  <rect x="100" y="140" width="6" height="6" fill="#3b3" transform="rotate(45 103 143)"/>
+  <rect x="320" y="100" width="6" height="6" fill="#d33" transform="rotate(45 323 103)"/>
+  <text x="395" y="198" fill="#8b949e" font-size="8">XP gems</text>
+
+  <!-- HUD panel -->
+  <rect x="520" y="30" width="220" height="280" rx="6" fill="#161b22" stroke="#30363d"/>
+  <text x="630" y="22" fill="#8b949e" font-size="11" text-anchor="middle">HUD (screen-space)</text>
+
+  <!-- XP bar -->
+  <rect x="535" y="48" width="190" height="10" rx="3" fill="#1c2128"/>
+  <rect x="535" y="48" width="110" height="10" rx="3" fill="#3b82f6" opacity="0.8"/>
+  <text x="630" y="56" fill="#fff" font-size="8" text-anchor="middle">XP</text>
+
+  <!-- HP bar -->
+  <rect x="565" y="250" width="140" height="14" rx="3" fill="#1c2128"/>
+  <rect x="565" y="250" width="105" height="14" rx="3" fill="#22863a" opacity="0.8"/>
+  <text x="635" y="261" fill="#fff" font-size="9" text-anchor="middle">75 / 100</text>
+
+  <!-- weapon slots -->
+  <g>
+    <rect x="535" y="272" width="28" height="28" rx="3" fill="#1c2128" stroke="#30363d"/>
+    <text x="549" y="291" fill="#fff" font-size="13" text-anchor="middle">◆</text>
+    <rect x="567" y="272" width="28" height="28" rx="3" fill="#1c2128" stroke="#30363d"/>
+    <text x="581" y="291" fill="#fff" font-size="13" text-anchor="middle">◎</text>
+    <rect x="599" y="272" width="28" height="28" rx="3" fill="#1c2128" stroke="#30363d"/>
+    <text x="613" y="291" fill="#fff" font-size="11" text-anchor="middle">⚡</text>
+  </g>
+  <text x="535" y="268" fill="#8b949e" font-size="8">weapons</text>
+
+  <!-- stats -->
+  <text x="535" y="80" fill="#e6edf3" font-size="11">Lv. 4</text>
+  <text x="535" y="96" fill="#c9d1d9" font-size="11">02:37</text>
+  <text x="535" y="112" fill="#c9d1d9" font-size="11">Kills: 83</text>
+  <text x="535" y="140" fill="#d2a8ff" font-size="10">DMG ×1.30</text>
+  <text x="535" y="156" fill="#d2a8ff" font-size="10">SPD ×1.12</text>
+  <text x="535" y="172" fill="#d2a8ff" font-size="10">Armor 2</text>
+
+  <!-- arrowhead definition -->
+  <defs>
+    <marker id="arrowGrey" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="none" stroke="#8b949e" stroke-width="1"/>
+    </marker>
+  </defs>
+</svg>
+<p class="diagram-caption">Overview: enemies swarm from off-screen, weapons fire automatically, gems fuel the level-up loop.</p>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="architecture">3. Architecture — How the Files Connect</h2>
+<p>The project is split into <strong>14 Lua files</strong>, each handling one responsibility. Here's every file and what it does:</p>
+
+<div class="file-tree">
+<span class="dir">bullet-hell/</span><br>
+├── <span class="file">conf.lua</span>         <span class="desc">— Window size, title, LÖVE settings</span><br>
+├── <span class="file">main.lua</span>         <span class="desc">— Game loop: load → update → draw</span><br>
+├── <span class="file">player.lua</span>       <span class="desc">— Player movement, HP, XP, stats</span><br>
+├── <span class="file">enemy.lua</span>        <span class="desc">— Enemy types &amp; chase AI</span><br>
+├── <span class="file">spawner.lua</span>      <span class="desc">— Time-based enemy wave spawning</span><br>
+├── <span class="file">weapons.lua</span>      <span class="desc">— 6 auto-firing weapons + projectile pool</span><br>
+├── <span class="file">gems.lua</span>         <span class="desc">— XP gem drops &amp; magnetic pickup</span><br>
+├── <span class="file">levelup.lua</span>      <span class="desc">— Level-up choice screen UI</span><br>
+├── <span class="file">camera.lua</span>       <span class="desc">— Smooth-following camera</span><br>
+├── <span class="file">sprites.lua</span>      <span class="desc">— Procedural pixel-art sprite generator</span><br>
+├── <span class="file">particles.lua</span>    <span class="desc">— Explosions, sparks, damage numbers</span><br>
+├── <span class="file">background.lua</span>   <span class="desc">— Infinite tiled ground</span><br>
+├── <span class="file">hud.lua</span>          <span class="desc">— HP bar, XP bar, timer, weapon slots</span><br>
+└── <span class="file">utils.lua</span>        <span class="desc">— Maths helpers (distance, collision, etc.)</span>
+</div>
+
+<p>The key insight: <strong><code>main.lua</code> is the glue</strong>. It <code>require()</code>s every module and wires them together. Each module only knows about the things it needs.</p>
+
+<div class="diagram">
+<svg viewBox="0 0 720 440" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, sans-serif">
+  <rect width="720" height="440" rx="8" fill="#0d1117"/>
+
+  <!-- main.lua (central hub) -->
+  <rect x="280" y="10" width="160" height="40" rx="6" fill="#1f6feb" stroke="#58a6ff" stroke-width="1.5"/>
+  <text x="360" y="35" fill="#fff" font-size="13" font-weight="bold" text-anchor="middle">main.lua</text>
+
+  <!-- Tier 1: core systems -->
+  <rect x="20"  y="100" width="120" height="36" rx="5" fill="#238636" stroke="#3fb950"/>
+  <text x="80"  y="123" fill="#fff" font-size="11" text-anchor="middle">player.lua</text>
+
+  <rect x="160" y="100" width="120" height="36" rx="5" fill="#8b5e3c" stroke="#d29922"/>
+  <text x="220" y="123" fill="#fff" font-size="11" text-anchor="middle">spawner.lua</text>
+
+  <rect x="300" y="100" width="120" height="36" rx="5" fill="#8b3a62" stroke="#f778ba"/>
+  <text x="360" y="123" fill="#fff" font-size="11" text-anchor="middle">weapons.lua</text>
+
+  <rect x="440" y="100" width="120" height="36" rx="5" fill="#553c9a" stroke="#a371f7"/>
+  <text x="500" y="123" fill="#fff" font-size="11" text-anchor="middle">gems.lua</text>
+
+  <rect x="580" y="100" width="120" height="36" rx="5" fill="#6e4020" stroke="#d29922"/>
+  <text x="640" y="123" fill="#fff" font-size="11" text-anchor="middle">levelup.lua</text>
+
+  <!-- Tier 2: entities & data -->
+  <rect x="160" y="190" width="120" height="36" rx="5" fill="#8b3a3a" stroke="#f85149"/>
+  <text x="220" y="213" fill="#fff" font-size="11" text-anchor="middle">enemy.lua</text>
+
+  <rect x="300" y="190" width="120" height="36" rx="5" fill="#2d4a6f" stroke="#58a6ff"/>
+  <text x="360" y="213" fill="#fff" font-size="11" text-anchor="middle">camera.lua</text>
+
+  <rect x="440" y="190" width="120" height="36" rx="5" fill="#2d5a3a" stroke="#56d364"/>
+  <text x="500" y="213" fill="#fff" font-size="11" text-anchor="middle">sprites.lua</text>
+
+  <!-- Tier 3: visual / utility -->
+  <rect x="90"  y="280" width="120" height="36" rx="5" fill="#3a3a5c" stroke="#8b8bd6"/>
+  <text x="150" y="303" fill="#fff" font-size="11" text-anchor="middle">particles.lua</text>
+
+  <rect x="230" y="280" width="120" height="36" rx="5" fill="#2a4a2a" stroke="#56d364"/>
+  <text x="290" y="303" fill="#fff" font-size="11" text-anchor="middle">background.lua</text>
+
+  <rect x="370" y="280" width="100" height="36" rx="5" fill="#4a3a2a" stroke="#d29922"/>
+  <text x="420" y="303" fill="#fff" font-size="11" text-anchor="middle">hud.lua</text>
+
+  <rect x="490" y="280" width="120" height="36" rx="5" fill="#2a3a4a" stroke="#79c0ff"/>
+  <text x="550" y="303" fill="#fff" font-size="11" text-anchor="middle">utils.lua</text>
+
+  <!-- conf -->
+  <rect x="535" y="10" width="100" height="32" rx="5" fill="#21262d" stroke="#484f58"/>
+  <text x="585" y="31" fill="#8b949e" font-size="11" text-anchor="middle">conf.lua</text>
+
+  <!-- Arrows from main down -->
+  <g stroke="#484f58" stroke-width="1.2" fill="none" marker-end="url(#arrowM)">
+    <line x1="310" y1="50" x2="80"  y2="98"/>
+    <line x1="340" y1="50" x2="220" y2="98"/>
+    <line x1="360" y1="50" x2="360" y2="98"/>
+    <line x1="380" y1="50" x2="500" y2="98"/>
+    <line x1="410" y1="50" x2="640" y2="98"/>
+    <line x1="350" y1="50" x2="360" y2="188"/>
+    <line x1="340" y1="50" x2="150" y2="278"/>
+    <line x1="350" y1="50" x2="290" y2="278"/>
+    <line x1="370" y1="50" x2="420" y2="278"/>
+  </g>
+
+  <!-- spawner → enemy -->
+  <g stroke="#484f58" stroke-width="1" fill="none" marker-end="url(#arrowM)" stroke-dasharray="4 3">
+    <line x1="220" y1="136" x2="220" y2="188"/>
+    <line x1="80"  y1="136" x2="500" y2="188"/>
+    <line x1="220" y1="226" x2="500" y2="188"/>
+    <line x1="550" y1="316" x2="550" y2="370"/>
+  </g>
+
+  <!-- Legend -->
+  <text x="360" y="380" fill="#8b949e" font-size="10" text-anchor="middle">Solid arrows = main.lua requires the module · Dashed = module-to-module dependency</text>
+
+  <!-- utils label -->
+  <text x="550" y="375" fill="#79c0ff" font-size="9" text-anchor="middle">used by almost everything</text>
+
+  <defs>
+    <marker id="arrowM" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto">
+      <path d="M0,0 L7,2.5 L0,5" fill="none" stroke="#484f58" stroke-width="1"/>
+    </marker>
+  </defs>
+</svg>
+<p class="diagram-caption">Module dependency map. <code>main.lua</code> orchestrates everything; each module has a single, focused job.</p>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="gameloop">4. The Game Loop</h2>
+<p>Every LÖVE game follows the same heartbeat. The engine calls your functions in a fixed order, over and over, typically 60 times per second:</p>
+
+<div class="diagram">
+<svg viewBox="0 0 700 180" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, sans-serif">
+  <rect width="700" height="180" rx="8" fill="#0d1117"/>
+
+  <!-- love.load -->
+  <rect x="30" y="60" width="130" height="55" rx="8" fill="#238636" stroke="#3fb950"/>
+  <text x="95" y="82" fill="#fff" font-size="12" font-weight="bold" text-anchor="middle">love.load()</text>
+  <text x="95" y="100" fill="#adf" font-size="10" text-anchor="middle">Runs ONCE at start</text>
+
+  <!-- love.update -->
+  <rect x="210" y="60" width="160" height="55" rx="8" fill="#1f6feb" stroke="#58a6ff"/>
+  <text x="290" y="82" fill="#fff" font-size="12" font-weight="bold" text-anchor="middle">love.update(dt)</text>
+  <text x="290" y="100" fill="#adf" font-size="10" text-anchor="middle">Move things, check logic</text>
+
+  <!-- love.draw -->
+  <rect x="420" y="60" width="130" height="55" rx="8" fill="#8b5e3c" stroke="#d29922"/>
+  <text x="485" y="82" fill="#fff" font-size="12" font-weight="bold" text-anchor="middle">love.draw()</text>
+  <text x="485" y="100" fill="#adf" font-size="10" text-anchor="middle">Render everything</text>
+
+  <!-- Arrows -->
+  <g stroke="#58a6ff" stroke-width="2" fill="none" marker-end="url(#arrowB)">
+    <line x1="160" y1="87" x2="208" y2="87"/>
+    <line x1="370" y1="87" x2="418" y2="87"/>
+  </g>
+
+  <!-- Loop arrow -->
+  <path d="M550,87 Q620,87 620,40 Q620,10 290,10 Q210,10 210,40 L210,58"
+        stroke="#58a6ff" stroke-width="1.5" fill="none" marker-end="url(#arrowB)" stroke-dasharray="5 3"/>
+  <text x="420" y="25" fill="#58a6ff" font-size="10" text-anchor="middle">repeat ~60× per second</text>
+
+  <!-- dt explanation -->
+  <text x="290" y="140" fill="#8b949e" font-size="11" text-anchor="middle"><tspan font-weight="bold" fill="#d2a8ff">dt</tspan> = "delta time" — seconds since last frame (~0.016)</text>
+  <text x="290" y="158" fill="#8b949e" font-size="11" text-anchor="middle">Multiply speeds by dt so movement is frame-rate independent.</text>
+
+  <defs>
+    <marker id="arrowB" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#58a6ff" stroke="none"/>
+    </marker>
+  </defs>
+</svg>
+<p class="diagram-caption">The core game loop. <code>dt</code> keeps everything smooth regardless of frame rate.</p>
+</div>
+
+<p>Here's a simplified version of what our <code>love.update(dt)</code> does each frame, in order:</p>
+
+<pre><code><span class="kw">function</span> <span class="fn">love.update</span>(dt)
+    camera:<span class="fn">update</span>(dt, player.x, player.y)    <span class="cm">-- 1. Follow the player</span>
+    player:<span class="fn">update</span>(dt)                         <span class="cm">-- 2. Read input, move</span>
+    Weapons.<span class="fn">updatePlayer</span>(player, enemies, dt) <span class="cm">-- 3. Auto-fire weapons</span>
+    Weapons.<span class="fn">updateProjectiles</span>(dt, ...)        <span class="cm">-- 4. Move bullets, check hits</span>
+    spawner:<span class="fn">update</span>(dt, ...)                   <span class="cm">-- 5. Spawn &amp; move enemies</span>
+    gems:<span class="fn">update</span>(dt, player)                   <span class="cm">-- 6. Collect gems → XP</span>
+    <span class="cm">-- 7. Contact damage, death drops, level-ups...</span>
+<span class="kw">end</span></code></pre>
+
+<div class="callout tip">
+  <strong>Why <code>dt</code> matters:</strong> If you write <code>player.x = player.x + 5</code>, the player moves 5 pixels per <em>frame</em>. At 60 FPS that's 300 px/s, but at 30 FPS it's only 150 px/s! Instead, write <code>player.x = player.x + 300 * dt</code> and you get 300 px/s regardless of frame rate.
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="camera">5. The Camera System</h2>
+<p>In <em>Vampire Survivors</em> the player roams an infinite field, so we can't just draw things at fixed screen positions. We need a <strong>camera</strong> that follows the player and shifts the entire world so the player is always near the centre of the screen.</p>
+
+<div class="diagram">
+<svg viewBox="0 0 700 260" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, sans-serif">
+  <rect width="700" height="260" rx="8" fill="#0d1117"/>
+
+  <!-- World space label -->
+  <text x="180" y="20" fill="#8b949e" font-size="11" text-anchor="middle">WORLD SPACE</text>
+  <text x="540" y="20" fill="#8b949e" font-size="11" text-anchor="middle">SCREEN SPACE</text>
+
+  <!-- World -->
+  <rect x="30" y="30" width="300" height="210" rx="4" fill="#161b22" stroke="#30363d" stroke-dasharray="4 3"/>
+
+  <!-- Camera viewport in world -->
+  <rect x="80" y="55" width="200" height="150" rx="4" fill="none" stroke="#58a6ff" stroke-width="2"/>
+  <text x="180" y="50" fill="#58a6ff" font-size="10" text-anchor="middle">camera viewport</text>
+
+  <!-- Player in world -->
+  <circle cx="180" cy="130" r="6" fill="#5988e8"/>
+  <text x="180" y="150" fill="#8ab4f8" font-size="9" text-anchor="middle">player (1200, 800)</text>
+
+  <!-- Enemy in world -->
+  <circle cx="120" cy="90" r="5" fill="#d44"/>
+  <text x="120" y="82" fill="#f88" font-size="8" text-anchor="middle">(1140, 740)</text>
+
+  <!-- Screen -->
+  <rect x="400" y="30" width="270" height="210" rx="4" fill="#161b22" stroke="#58a6ff" stroke-width="1.5"/>
+
+  <!-- Player on screen (centred) -->
+  <circle cx="535" cy="135" r="6" fill="#5988e8"/>
+  <text x="535" y="155" fill="#8ab4f8" font-size="9" text-anchor="middle">player (400, 300)</text>
+  <text x="535" y="167" fill="#8b949e" font-size="8" text-anchor="middle">always screen centre!</text>
+
+  <!-- Enemy on screen -->
+  <circle cx="475" cy="95" r="5" fill="#d44"/>
+
+  <!-- Arrow showing transform -->
+  <g stroke="#d29922" stroke-width="1.5" fill="none" marker-end="url(#arrowY)">
+    <path d="M335,130 Q365,130 395,130"/>
+  </g>
+  <text x="366" y="122" fill="#d29922" font-size="10" text-anchor="middle">translate</text>
+  <text x="366" y="136" fill="#d29922" font-size="9" text-anchor="middle">−camera.x</text>
+  <text x="366" y="148" fill="#d29922" font-size="9" text-anchor="middle">−camera.y</text>
+
+  <defs>
+    <marker id="arrowY" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#d29922" stroke="none"/>
+    </marker>
+  </defs>
+</svg>
+<p class="diagram-caption">The camera translates everything so the player appears at screen-centre. An enemy at world position (1140, 740) is drawn relative to the camera.</p>
+</div>
+
+<p>The entire camera is just a <strong>translation</strong>. Before drawing anything in the world, we push a transform:</p>
+
+<pre><code><span class="kw">function</span> Camera:<span class="fn">push</span>()
+    love.graphics.<span class="fn">push</span>()
+    love.graphics.<span class="fn">translate</span>(
+        screenW / <span class="num">2</span> - self.x,   <span class="cm">-- shift so camera.x is at screen centre</span>
+        screenH / <span class="num">2</span> - self.y
+    )
+<span class="kw">end</span></code></pre>
+
+<p>Everything drawn between <code>camera:push()</code> and <code>camera:pop()</code> is positioned in <strong>world coordinates</strong>. The HUD is drawn <em>after</em> popping, so it stays fixed on screen.</p>
+
+<p>The camera follows the player with <strong>smooth interpolation</strong> (lerp) so it doesn't feel jerky:</p>
+
+<pre><code><span class="kw">function</span> Camera:<span class="fn">update</span>(dt, targetX, targetY)
+    <span class="kw">local</span> t = self.smoothing * dt
+    self.x = <span class="fn">lerp</span>(self.x, targetX, t)   <span class="cm">-- glide toward player</span>
+    self.y = <span class="fn">lerp</span>(self.y, targetY, t)
+<span class="kw">end</span></code></pre>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="player">6. The Player</h2>
+<p>The player is the simplest entity. They have <strong>position</strong>, <strong>speed</strong>, <strong>HP</strong>, and <strong>XP</strong>. Movement is handled by reading keyboard state every frame:</p>
+
+<pre><code><span class="kw">local</span> dx, dy = <span class="num">0</span>, <span class="num">0</span>
+<span class="kw">if</span> love.keyboard.<span class="fn">isDown</span>(<span class="str">"left"</span>, <span class="str">"a"</span>)  <span class="kw">then</span> dx = dx - <span class="num">1</span> <span class="kw">end</span>
+<span class="kw">if</span> love.keyboard.<span class="fn">isDown</span>(<span class="str">"right"</span>, <span class="str">"d"</span>) <span class="kw">then</span> dx = dx + <span class="num">1</span> <span class="kw">end</span>
+<span class="kw">if</span> love.keyboard.<span class="fn">isDown</span>(<span class="str">"up"</span>, <span class="str">"w"</span>)    <span class="kw">then</span> dy = dy - <span class="num">1</span> <span class="kw">end</span>
+<span class="kw">if</span> love.keyboard.<span class="fn">isDown</span>(<span class="str">"down"</span>, <span class="str">"s"</span>)  <span class="kw">then</span> dy = dy + <span class="num">1</span> <span class="kw">end</span>
+
+<span class="cm">-- Normalise diagonal so you don't move √2× faster</span>
+<span class="kw">if</span> dx ~= <span class="num">0</span> <span class="kw">and</span> dy ~= <span class="num">0</span> <span class="kw">then</span>
+    dx, dy = dx * <span class="num">0.707</span>, dy * <span class="num">0.707</span>
+<span class="kw">end</span>
+
+self.x = self.x + dx * speed * dt
+self.y = self.y + dy * speed * dt</code></pre>
+
+<div class="callout warn">
+  <strong>Diagonal normalisation</strong> is easy to forget! Without it, pressing two keys at once gives you 1.41× the speed because the movement vector has length √2 instead of 1.
+</div>
+
+<h3>Player stats that weapons and passives modify</h3>
+<p>Instead of hard-coding weapon damage, we store <strong>multiplier stats</strong> on the player that everything references:</p>
+<ul>
+  <li><code>mightMult</code> — multiplies all weapon damage</li>
+  <li><code>speedMult</code> — multiplies movement speed</li>
+  <li><code>cooldownMult</code> — scales weapon fire rate</li>
+  <li><code>areaMult</code> — scales weapon area &amp; pickup range</li>
+  <li><code>armor</code> — flat damage reduction</li>
+  <li><code>recovery</code> — HP regenerated per second</li>
+</ul>
+<p>This way, when the level-up screen boosts "Might +15%", it just does <code>player.mightMult = player.mightMult + 0.15</code> and every weapon automatically deals more damage.</p>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="enemies">7. Enemies &amp; Spawning</h2>
+<p>We have <strong>six enemy types</strong>, each defined as a simple table of stats:</p>
+
+<div class="diagram">
+<svg viewBox="0 0 720 200" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, sans-serif">
+  <rect width="720" height="200" rx="8" fill="#0d1117"/>
+
+  <!-- Bat -->
+  <g transform="translate(30, 30)">
+    <rect width="90" height="145" rx="6" fill="#2d1515" stroke="#f85149"/>
+    <circle cx="45" cy="35" r="14" fill="#d44"/>
+    <text x="45" y="70" fill="#f88" font-size="11" text-anchor="middle" font-weight="bold">Bat</text>
+    <text x="45" y="86" fill="#8b949e" font-size="9" text-anchor="middle">HP: 8</text>
+    <text x="45" y="99" fill="#8b949e" font-size="9" text-anchor="middle">Speed: 110</text>
+    <text x="45" y="112" fill="#8b949e" font-size="9" text-anchor="middle">DMG: 5</text>
+    <text x="45" y="130" fill="#58a6ff" font-size="8" text-anchor="middle">Unlocks: 0:00</text>
+  </g>
+
+  <!-- Fly -->
+  <g transform="translate(140, 30)">
+    <rect width="90" height="145" rx="6" fill="#1f152d" stroke="#a371f7"/>
+    <circle cx="45" cy="35" r="10" fill="#85e" opacity="0.8"/>
+    <text x="45" y="70" fill="#c9f" font-size="11" text-anchor="middle" font-weight="bold">Fly</text>
+    <text x="45" y="86" fill="#8b949e" font-size="9" text-anchor="middle">HP: 5</text>
+    <text x="45" y="99" fill="#8b949e" font-size="9" text-anchor="middle">Speed: 140</text>
+    <text x="45" y="112" fill="#8b949e" font-size="9" text-anchor="middle">DMG: 3</text>
+    <text x="45" y="130" fill="#58a6ff" font-size="8" text-anchor="middle">Unlocks: 0:30</text>
+  </g>
+
+  <!-- Zombie -->
+  <g transform="translate(250, 30)">
+    <rect width="90" height="145" rx="6" fill="#152d15" stroke="#3fb950"/>
+    <circle cx="45" cy="35" r="14" fill="#4a4"/>
+    <text x="45" y="70" fill="#6d6" font-size="11" text-anchor="middle" font-weight="bold">Zombie</text>
+    <text x="45" y="86" fill="#8b949e" font-size="9" text-anchor="middle">HP: 20</text>
+    <text x="45" y="99" fill="#8b949e" font-size="9" text-anchor="middle">Speed: 45</text>
+    <text x="45" y="112" fill="#8b949e" font-size="9" text-anchor="middle">DMG: 10</text>
+    <text x="45" y="130" fill="#58a6ff" font-size="8" text-anchor="middle">Unlocks: 1:00</text>
+  </g>
+
+  <!-- Skeleton -->
+  <g transform="translate(360, 30)">
+    <rect width="90" height="145" rx="6" fill="#2d2d2a" stroke="#d1d1c8"/>
+    <circle cx="45" cy="35" r="14" fill="#ccc"/>
+    <text x="45" y="70" fill="#eee" font-size="11" text-anchor="middle" font-weight="bold">Skeleton</text>
+    <text x="45" y="86" fill="#8b949e" font-size="9" text-anchor="middle">HP: 30</text>
+    <text x="45" y="99" fill="#8b949e" font-size="9" text-anchor="middle">Speed: 65</text>
+    <text x="45" y="112" fill="#8b949e" font-size="9" text-anchor="middle">DMG: 12</text>
+    <text x="45" y="130" fill="#58a6ff" font-size="8" text-anchor="middle">Unlocks: 2:00</text>
+  </g>
+
+  <!-- Ghost -->
+  <g transform="translate(470, 30)">
+    <rect width="90" height="145" rx="6" fill="#15152d" stroke="#79c0ff"/>
+    <circle cx="45" cy="35" r="13" fill="#8af" opacity="0.7"/>
+    <text x="45" y="70" fill="#bdf" font-size="11" text-anchor="middle" font-weight="bold">Ghost</text>
+    <text x="45" y="86" fill="#8b949e" font-size="9" text-anchor="middle">HP: 18</text>
+    <text x="45" y="99" fill="#8b949e" font-size="9" text-anchor="middle">Speed: 80</text>
+    <text x="45" y="112" fill="#8b949e" font-size="9" text-anchor="middle">DMG: 8</text>
+    <text x="45" y="130" fill="#58a6ff" font-size="8" text-anchor="middle">Unlocks: 3:00</text>
+  </g>
+
+  <!-- Golem -->
+  <g transform="translate(580, 30)">
+    <rect width="110" height="145" rx="6" fill="#2d2515" stroke="#d29922"/>
+    <circle cx="55" cy="35" r="18" fill="#96734e"/>
+    <text x="55" y="70" fill="#edb" font-size="11" text-anchor="middle" font-weight="bold">Golem</text>
+    <text x="55" y="86" fill="#8b949e" font-size="9" text-anchor="middle">HP: 120</text>
+    <text x="55" y="99" fill="#8b949e" font-size="9" text-anchor="middle">Speed: 30</text>
+    <text x="55" y="112" fill="#8b949e" font-size="9" text-anchor="middle">DMG: 25</text>
+    <text x="55" y="130" fill="#58a6ff" font-size="8" text-anchor="middle">Unlocks: 5:00</text>
+  </g>
+</svg>
+<p class="diagram-caption">Six enemy types, unlocking over time. Stats scale upward with difficulty as the clock ticks.</p>
+</div>
+
+<h3>The chase AI</h3>
+<p>Every enemy has exactly one behaviour: <strong>walk toward the player</strong>. That's it! The code is just two lines of trigonometry:</p>
+
+<pre><code><span class="kw">local</span> angle = <span class="fn">math.atan2</span>(playerY - self.y, playerX - self.x)
+self.x = self.x + <span class="fn">math.cos</span>(angle) * self.speed * dt
+self.y = self.y + <span class="fn">math.sin</span>(angle) * self.speed * dt</code></pre>
+
+<p><code>math.atan2(dy, dx)</code> gives the angle from the enemy to the player. Then <code>cos</code>/<code>sin</code> convert that angle back into an x/y direction. This is the same pattern you'll use in almost every 2D game.</p>
+
+<h3>Spawning from off-screen</h3>
+<p>The spawner picks a random edge of the screen (top, bottom, left, right), places a new enemy just outside the camera view, and it naturally walks inward. Difficulty scales with time: enemies get more HP, and the spawn rate increases.</p>
+
+<pre><code><span class="cm">-- Difficulty ramps up continuously</span>
+self.difficulty = <span class="num">1.0</span> + gameTime * <span class="num">0.005</span>   <span class="cm">-- +50% every 100 seconds</span>
+self.spawnRate  = <span class="num">0.8</span> + gameTime * <span class="num">0.012</span>   <span class="cm">-- more enemies per second</span></code></pre>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="weapons">8. The Auto-Weapon System</h2>
+<p>This is the heart of the game. Weapons fire <strong>automatically</strong> on a cooldown timer — the player never presses a fire button. We have six weapons, each with five upgrade levels:</p>
+
+<div class="diagram">
+<svg viewBox="0 0 720 280" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, sans-serif">
+  <rect width="720" height="280" rx="8" fill="#0d1117"/>
+
+  <!-- Weapon boxes -->
+  <g transform="translate(20, 20)">
+    <!-- Wand -->
+    <rect width="105" height="110" rx="6" fill="#152040" stroke="#58a6ff"/>
+    <text x="52" y="24" fill="#58a6ff" font-size="18" text-anchor="middle">◆</text>
+    <text x="52" y="44" fill="#e6edf3" font-size="11" text-anchor="middle" font-weight="bold">Magic Wand</text>
+    <text x="52" y="60" fill="#8b949e" font-size="9" text-anchor="middle">Bolt at nearest</text>
+    <text x="52" y="72" fill="#8b949e" font-size="9" text-anchor="middle">enemy</text>
+    <text x="52" y="92" fill="#79c0ff" font-size="9" text-anchor="middle">Type: projectile</text>
+  </g>
+
+  <g transform="translate(135, 20)">
+    <rect width="105" height="110" rx="6" fill="#302818" stroke="#d29922"/>
+    <text x="52" y="24" fill="#d29922" font-size="18" text-anchor="middle">━</text>
+    <text x="52" y="44" fill="#e6edf3" font-size="11" text-anchor="middle" font-weight="bold">Holy Whip</text>
+    <text x="52" y="60" fill="#8b949e" font-size="9" text-anchor="middle">Slash in front</text>
+    <text x="52" y="72" fill="#8b949e" font-size="9" text-anchor="middle">of player</text>
+    <text x="52" y="92" fill="#79c0ff" font-size="9" text-anchor="middle">Type: area</text>
+  </g>
+
+  <g transform="translate(250, 20)">
+    <rect width="105" height="110" rx="6" fill="#1a2e1a" stroke="#3fb950"/>
+    <text x="52" y="24" fill="#3fb950" font-size="18" text-anchor="middle">◎</text>
+    <text x="52" y="44" fill="#e6edf3" font-size="11" text-anchor="middle" font-weight="bold">Garlic Aura</text>
+    <text x="52" y="60" fill="#8b949e" font-size="9" text-anchor="middle">Constant ring</text>
+    <text x="52" y="72" fill="#8b949e" font-size="9" text-anchor="middle">around player</text>
+    <text x="52" y="92" fill="#79c0ff" font-size="9" text-anchor="middle">Type: area (follow)</text>
+  </g>
+
+  <g transform="translate(365, 20)">
+    <rect width="105" height="110" rx="6" fill="#2d1f10" stroke="#d29922"/>
+    <text x="52" y="24" fill="#d29922" font-size="18" text-anchor="middle">⚔</text>
+    <text x="52" y="44" fill="#e6edf3" font-size="11" text-anchor="middle" font-weight="bold">Throwing Axe</text>
+    <text x="52" y="60" fill="#8b949e" font-size="9" text-anchor="middle">Arcing throw</text>
+    <text x="52" y="72" fill="#8b949e" font-size="9" text-anchor="middle">passes through</text>
+    <text x="52" y="92" fill="#79c0ff" font-size="9" text-anchor="middle">Type: projectile</text>
+  </g>
+
+  <g transform="translate(480, 20)">
+    <rect width="105" height="110" rx="6" fill="#2a2010" stroke="#e3b341"/>
+    <text x="52" y="24" fill="#e3b341" font-size="18" text-anchor="middle">▣</text>
+    <text x="52" y="44" fill="#e6edf3" font-size="11" text-anchor="middle" font-weight="bold">King Bible</text>
+    <text x="52" y="60" fill="#8b949e" font-size="9" text-anchor="middle">Books orbit</text>
+    <text x="52" y="72" fill="#8b949e" font-size="9" text-anchor="middle">the player</text>
+    <text x="52" y="92" fill="#79c0ff" font-size="9" text-anchor="middle">Type: orbital</text>
+  </g>
+
+  <g transform="translate(595, 20)">
+    <rect width="105" height="110" rx="6" fill="#1a1a30" stroke="#a371f7"/>
+    <text x="52" y="24" fill="#a371f7" font-size="18" text-anchor="middle">⚡</text>
+    <text x="52" y="44" fill="#e6edf3" font-size="11" text-anchor="middle" font-weight="bold">Lightning</text>
+    <text x="52" y="60" fill="#8b949e" font-size="9" text-anchor="middle">Strikes random</text>
+    <text x="52" y="72" fill="#8b949e" font-size="9" text-anchor="middle">nearby enemy</text>
+    <text x="52" y="92" fill="#79c0ff" font-size="9" text-anchor="middle">Type: targeted</text>
+  </g>
+
+  <!-- How the cooldown loop works -->
+  <rect x="20" y="150" width="680" height="110" rx="6" fill="#161b22" stroke="#30363d"/>
+  <text x="360" y="172" fill="#e6edf3" font-size="12" text-anchor="middle" font-weight="bold">How auto-fire works (every frame):</text>
+
+  <rect x="50" y="188" width="140" height="44" rx="5" fill="#21262d"/>
+  <text x="120" y="207" fill="#c9d1d9" font-size="10" text-anchor="middle">timer -= dt</text>
+  <text x="120" y="222" fill="#8b949e" font-size="9" text-anchor="middle">(count down)</text>
+
+  <rect x="230" y="188" width="140" height="44" rx="5" fill="#21262d"/>
+  <text x="300" y="207" fill="#c9d1d9" font-size="10" text-anchor="middle">timer ≤ 0 ?</text>
+  <text x="300" y="222" fill="#3fb950" font-size="9" text-anchor="middle">FIRE!</text>
+
+  <rect x="410" y="188" width="140" height="44" rx="5" fill="#21262d"/>
+  <text x="480" y="207" fill="#c9d1d9" font-size="10" text-anchor="middle">weapon.fire()</text>
+  <text x="480" y="222" fill="#8b949e" font-size="9" text-anchor="middle">create projectiles</text>
+
+  <rect x="590" y="188" width="95" height="44" rx="5" fill="#21262d"/>
+  <text x="637" y="207" fill="#c9d1d9" font-size="10" text-anchor="middle">reset timer</text>
+  <text x="637" y="222" fill="#8b949e" font-size="9" text-anchor="middle">= cooldown</text>
+
+  <g stroke="#484f58" stroke-width="1.2" marker-end="url(#arrowG2)">
+    <line x1="190" y1="210" x2="228" y2="210"/>
+    <line x1="370" y1="210" x2="408" y2="210"/>
+    <line x1="550" y1="210" x2="588" y2="210"/>
+  </g>
+
+  <defs>
+    <marker id="arrowG2" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto">
+      <path d="M0,0 L7,2.5 L0,5" fill="#484f58"/>
+    </marker>
+  </defs>
+</svg>
+<p class="diagram-caption">Six weapons with four different firing behaviours, all unified by the same cooldown timer pattern.</p>
+</div>
+
+<h3>Projectile types — one pool, many behaviours</h3>
+<p>All active projectiles from all weapons live in a single flat table: <code>Weapons.projectiles</code>. Each projectile has a <code>visual</code> field that determines how it's drawn, plus optional behaviour flags:</p>
+
+<ul>
+  <li><code>followPlayer = true</code> → sticks to the player's position (garlic, bible)</li>
+  <li><code>orbitAngle</code> + <code>orbitR</code> → orbits in a circle (bible)</li>
+  <li><code>ay = 180</code> → gravity pulls it into an arc (axe)</li>
+  <li><code>pierce = N</code> → passes through N enemies before dying</li>
+  <li><code>hitCooldown</code> → can re-hit the same enemy after a delay (bible)</li>
+  <li><code>knockback</code> → pushes enemies away on hit</li>
+</ul>
+
+<p>This "one table, different flags" approach keeps the code simple. One update loop and one draw loop handle everything.</p>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="collision">9. Collision Detection</h2>
+<p>The game uses the simplest possible collision: <strong>circle vs circle</strong>. Every entity has a position (x, y) and a radius. Two things overlap when the distance between their centres is less than the sum of their radii.</p>
+
+<div class="diagram">
+<svg viewBox="0 0 500 200" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, sans-serif">
+  <rect width="500" height="200" rx="8" fill="#0d1117"/>
+
+  <!-- No collision -->
+  <circle cx="100" cy="100" r="30" fill="none" stroke="#3fb950" stroke-width="1.5"/>
+  <circle cx="100" cy="100" r="2" fill="#3fb950"/>
+  <text x="100" y="90" fill="#3fb950" font-size="9" text-anchor="middle">r₁</text>
+
+  <circle cx="175" cy="80" r="20" fill="none" stroke="#f85149" stroke-width="1.5"/>
+  <circle cx="175" cy="80" r="2" fill="#f85149"/>
+  <text x="175" y="73" fill="#f85149" font-size="9" text-anchor="middle">r₂</text>
+
+  <line x1="100" y1="100" x2="175" y2="80" stroke="#484f58" stroke-width="1" stroke-dasharray="3 3"/>
+  <text x="138" y="103" fill="#8b949e" font-size="9" text-anchor="middle">dist > r₁+r₂</text>
+  <text x="138" y="150" fill="#3fb950" font-size="11" text-anchor="middle">✓ No collision</text>
+
+  <!-- Collision! -->
+  <circle cx="340" cy="95" r="30" fill="none" stroke="#3fb950" stroke-width="1.5"/>
+  <circle cx="340" cy="95" r="2" fill="#3fb950"/>
+
+  <circle cx="365" cy="85" r="20" fill="none" stroke="#f85149" stroke-width="1.5"/>
+  <circle cx="365" cy="85" r="2" fill="#f85149"/>
+
+  <!-- overlap region -->
+  <ellipse cx="355" cy="90" rx="12" ry="18" fill="#f85149" opacity="0.15"/>
+
+  <line x1="340" y1="95" x2="365" y2="85" stroke="#484f58" stroke-width="1" stroke-dasharray="3 3"/>
+  <text x="352" y="115" fill="#8b949e" font-size="9" text-anchor="middle">dist ≤ r₁+r₂</text>
+  <text x="352" y="150" fill="#f85149" font-size="11" text-anchor="middle">⚠ Collision!</text>
+</svg>
+<p class="diagram-caption">Circle-circle collision: the cheapest and most common check in 2D games.</p>
+</div>
+
+<pre><code><span class="kw">function</span> Utils.<span class="fn">circlesOverlap</span>(x1, y1, r1, x2, y2, r2)
+    <span class="kw">local</span> dx = x2 - x1
+    <span class="kw">local</span> dy = y2 - y1
+    <span class="kw">local</span> rsum = r1 + r2
+    <span class="kw">return</span> (dx*dx + dy*dy) &lt;= rsum*rsum  <span class="cm">-- compare squared to avoid sqrt!</span>
+<span class="kw">end</span></code></pre>
+
+<div class="callout tip">
+  <strong>Performance trick:</strong> We compare the <em>squared</em> distance against the <em>squared</em> sum of radii. This avoids calling <code>math.sqrt()</code> thousands of times per frame — it's exactly the same test, just faster.
+</div>
+
+<p>The game checks three collision pairs each frame:</p>
+<ol>
+  <li><strong>Weapon projectiles vs enemies</strong> — deals damage, spawns particles</li>
+  <li><strong>Enemy bodies vs player</strong> — contact damage with mercy invulnerability</li>
+  <li><strong>Gems vs player</strong> — pickup collection within a magnetism range</li>
+</ol>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="xp">10. XP, Gems &amp; Levelling Up</h2>
+<p>Here's the core "one more level" loop that makes roguelites addictive:</p>
+
+<div class="diagram">
+<svg viewBox="0 0 700 160" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, sans-serif">
+  <rect width="700" height="160" rx="8" fill="#0d1117"/>
+
+  <rect x="20"  y="50" width="110" height="60" rx="6" fill="#2d1515" stroke="#f85149"/>
+  <text x="75"  y="75" fill="#f88" font-size="11" text-anchor="middle" font-weight="bold">Kill enemy</text>
+  <text x="75"  y="92" fill="#8b949e" font-size="9" text-anchor="middle">→ drops gem</text>
+
+  <rect x="160" y="50" width="110" height="60" rx="6" fill="#15152d" stroke="#58a6ff"/>
+  <text x="215" y="75" fill="#8af" font-size="11" text-anchor="middle" font-weight="bold">Collect gem</text>
+  <text x="215" y="92" fill="#8b949e" font-size="9" text-anchor="middle">magnetic pull</text>
+
+  <rect x="300" y="50" width="110" height="60" rx="6" fill="#1a2e1a" stroke="#3fb950"/>
+  <text x="355" y="75" fill="#6d6" font-size="11" text-anchor="middle" font-weight="bold">Gain XP</text>
+  <text x="355" y="92" fill="#8b949e" font-size="9" text-anchor="middle">fills XP bar</text>
+
+  <rect x="440" y="50" width="110" height="60" rx="6" fill="#2a2010" stroke="#e3b341"/>
+  <text x="495" y="75" fill="#eb5" font-size="11" text-anchor="middle" font-weight="bold">Level up!</text>
+  <text x="495" y="92" fill="#8b949e" font-size="9" text-anchor="middle">game pauses</text>
+
+  <rect x="580" y="50" width="100" height="60" rx="6" fill="#1a1a30" stroke="#a371f7"/>
+  <text x="630" y="75" fill="#c9f" font-size="11" text-anchor="middle" font-weight="bold">Choose</text>
+  <text x="630" y="92" fill="#8b949e" font-size="9" text-anchor="middle">weapon/stat</text>
+
+  <g stroke="#484f58" stroke-width="1.5" marker-end="url(#arrowGX)">
+    <line x1="130" y1="80" x2="158" y2="80"/>
+    <line x1="270" y1="80" x2="298" y2="80"/>
+    <line x1="410" y1="80" x2="438" y2="80"/>
+    <line x1="550" y1="80" x2="578" y2="80"/>
+  </g>
+
+  <!-- Loop back arrow -->
+  <path d="M630,112 L630,140 Q630,150 360,150 Q75,150 75,112"
+        stroke="#484f58" stroke-width="1" fill="none" stroke-dasharray="4 3" marker-end="url(#arrowGX)"/>
+  <text x="360" y="144" fill="#8b949e" font-size="9" text-anchor="middle">now you're stronger → kill more → repeat!</text>
+
+  <defs>
+    <marker id="arrowGX" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto">
+      <path d="M0,0 L7,2.5 L0,5" fill="#484f58"/>
+    </marker>
+  </defs>
+</svg>
+<p class="diagram-caption">The roguelite feedback loop: kill → collect → level → upgrade → kill faster.</p>
+</div>
+
+<h3>Gem magnetism</h3>
+<p>Gems sit on the ground until the player gets close (within <code>pickupRange</code>). Then they fly toward the player with accelerating speed:</p>
+
+<pre><code><span class="kw">if</span> dist &lt; player.pickupRange <span class="kw">then</span>
+    gem.magnetized = <span class="kw">true</span>
+<span class="kw">end</span>
+<span class="kw">if</span> gem.magnetized <span class="kw">then</span>
+    <span class="kw">local</span> angle = <span class="fn">angleTo</span>(gem.x, gem.y, player.x, player.y)
+    <span class="kw">local</span> speed = <span class="num">350</span> + <span class="num">200</span> * gem.age  <span class="cm">-- accelerates!</span>
+    gem.x = gem.x + <span class="fn">math.cos</span>(angle) * speed * dt
+    gem.y = gem.y + <span class="fn">math.sin</span>(angle) * speed * dt
+<span class="kw">end</span></code></pre>
+
+<h3>The level-up choice screen</h3>
+<p>When the XP bar fills, the game pauses and presents <strong>3 random choices</strong>. The pool of possible choices includes:</p>
+<ul>
+  <li><strong style="color:#3fb950;">New weapons</strong> you don't own yet (up to 6 slots)</li>
+  <li><strong style="color:#58a6ff;">Upgrades</strong> for weapons you already have (up to level 5)</li>
+  <li><strong style="color:#d2a8ff;">Passive stat boosts</strong> — Might, Speed, Armor, Recovery, Cooldown, Area, HP, Pickup Range</li>
+</ul>
+<p>Weapon-related choices are prioritised over passives so you build an interesting loadout early on.</p>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="sprites">11. Pixel Art Without Image Files</h2>
+<p>One unusual thing about this project: we have <strong>zero image files</strong>. All sprites are generated in code at startup. Each sprite is defined as a grid of numbers where 0 = transparent and each other number maps to a colour in a palette:</p>
+
+<pre><code><span class="kw">local</span> BAT_PAL = {
+    { <span class="num">0.75</span>, <span class="num">0.18</span>, <span class="num">0.18</span> },  <span class="cm">-- 1: dark red</span>
+    { <span class="num">1.00</span>, <span class="num">0.35</span>, <span class="num">0.25</span> },  <span class="cm">-- 2: bright red</span>
+    { <span class="num">1.00</span>, <span class="num">0.85</span>, <span class="num">0.20</span> },  <span class="cm">-- 3: yellow eyes</span>
+}
+<span class="kw">local</span> BAT_FRAME1 = {
+    { <span class="num">1</span>,_,_,_,_,_,_,_,<span class="num">1</span> },   <span class="cm">-- wing tips</span>
+    { <span class="num">1</span>,<span class="num">1</span>,_,_,_,_,_,<span class="num">1</span>,<span class="num">1</span> },   <span class="cm">-- wings spread</span>
+    { <span class="num">1</span>,<span class="num">1</span>,<span class="num">1</span>,<span class="num">2</span>,<span class="num">2</span>,<span class="num">2</span>,<span class="num">1</span>,<span class="num">1</span>,<span class="num">1</span> },   <span class="cm">-- body</span>
+    { _,<span class="num">1</span>,<span class="num">2</span>,<span class="num">3</span>,<span class="num">2</span>,<span class="num">3</span>,<span class="num">2</span>,<span class="num">1</span>,_ },   <span class="cm">-- face + eyes</span>
+    { _,_,<span class="num">2</span>,<span class="num">2</span>,<span class="num">2</span>,<span class="num">2</span>,<span class="num">2</span>,_,_ },   <span class="cm">-- body</span>
+    { _,_,_,<span class="num">2</span>,_,<span class="num">2</span>,_,_,_ },   <span class="cm">-- feet</span>
+}</code></pre>
+
+<p>At load time, <code>sprites.lua</code> converts each grid into a LÖVE <code>ImageData</code> object (setting each pixel's colour), then wraps it in an <code>Image</code> with <code>nearest</code> filtering for crisp pixel-art scaling. Each enemy type has two frames for a classic walk-wobble animation.</p>
+
+<div class="callout">
+  <strong>Why no image files?</strong> For a tutorial project, it keeps things self-contained — the entire game is just Lua code you can read. In a real project you'd typically use .png sprite sheets, but this approach is great for prototyping and game jams.
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="juice">12. Juice — Particles, Shake &amp; Numbers</h2>
+<p>"Juice" is game-dev slang for small effects that make the game <em>feel</em> satisfying even though they don't change the mechanics. We have three types:</p>
+
+<h3>Particle explosions</h3>
+<p>When an enemy dies, we spawn 10–15 tiny circles that fly outward and fade. Each particle is just <code>{x, y, vx, vy, life, size, colour}</code> — no physics engine needed.</p>
+
+<h3>Screen shake</h3>
+<p>When the player takes damage, we briefly offset the entire screen by a few random pixels:</p>
+<pre><code><span class="kw">if</span> shakeTimer > <span class="num">0</span> <span class="kw">then</span>
+    sx = (<span class="fn">math.random</span>() - <span class="num">0.5</span>) * shakeAmount * <span class="num">2</span>
+    sy = (<span class="fn">math.random</span>() - <span class="num">0.5</span>) * shakeAmount * <span class="num">2</span>
+<span class="kw">end</span>
+love.graphics.<span class="fn">translate</span>(sx, sy)  <span class="cm">-- everything jitters!</span></code></pre>
+
+<h3>Floating damage numbers</h3>
+<p>Every hit spawns a text particle showing the damage dealt. It floats upward and fades out. This gives the player constant visual feedback about how strong their weapons are.</p>
+
+<div class="diagram">
+<svg viewBox="0 0 600 160" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, sans-serif">
+  <rect width="600" height="160" rx="8" fill="#0d1117"/>
+
+  <!-- Before juice -->
+  <rect x="20" y="20" width="170" height="120" rx="6" fill="#161b22" stroke="#30363d"/>
+  <text x="105" y="16" fill="#8b949e" font-size="10" text-anchor="middle">Without juice</text>
+  <circle cx="105" cy="80" r="12" fill="#d44"/>
+  <text x="105" y="120" fill="#8b949e" font-size="9" text-anchor="middle">enemy just... disappears</text>
+
+  <!-- Arrow -->
+  <text x="225" y="85" fill="#484f58" font-size="24">→</text>
+
+  <!-- After juice -->
+  <rect x="270" y="20" width="310" height="120" rx="6" fill="#161b22" stroke="#30363d"/>
+  <text x="425" y="16" fill="#3fb950" font-size="10" text-anchor="middle">With juice ✨</text>
+
+  <!-- Explosion particles -->
+  <circle cx="370" cy="80" r="3" fill="#f85149" opacity="0.8"/>
+  <circle cx="385" cy="65" r="2.5" fill="#f85149" opacity="0.6"/>
+  <circle cx="355" cy="70" r="2" fill="#f85149" opacity="0.7"/>
+  <circle cx="390" cy="90" r="3" fill="#f85149" opacity="0.5"/>
+  <circle cx="360" cy="95" r="2" fill="#f85149" opacity="0.6"/>
+  <circle cx="380" cy="75" r="2.5" fill="#f85149" opacity="0.4"/>
+  <circle cx="345" cy="85" r="2" fill="#f85149" opacity="0.5"/>
+  <circle cx="395" cy="78" r="1.5" fill="#ff8" opacity="0.6"/>
+
+  <!-- Damage number floating up -->
+  <text x="375" y="52" fill="#ffd700" font-size="14" text-anchor="middle" font-weight="bold">22</text>
+  <text x="375" y="44" fill="#ffd700" font-size="10" text-anchor="middle" opacity="0.5">↑</text>
+
+  <!-- XP gem -->
+  <rect x="370" y="100" width="6" height="6" fill="#55f" transform="rotate(45 373 103)"/>
+  <text x="395" y="108" fill="#8b949e" font-size="8">+XP gem</text>
+
+  <!-- Shake indication -->
+  <text x="490" y="75" fill="#d29922" font-size="9">screen</text>
+  <text x="490" y="87" fill="#d29922" font-size="9">shakes!</text>
+  <path d="M475,78 L472,74 L478,82 L475,78" stroke="#d29922" stroke-width="1.5" fill="none"/>
+</svg>
+<p class="diagram-caption">A few cheap effects make the game feel 10× more satisfying.</p>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="hud">13. The Heads-Up Display</h2>
+<p>The HUD is drawn <strong>after</strong> popping the camera transform, so it stays fixed on screen. It shows:</p>
+
+<ul>
+  <li><strong>XP bar</strong> — full-width bar at the very top, fills left-to-right</li>
+  <li><strong>Level, timer, kills</strong> — text below the XP bar</li>
+  <li><strong>HP bar</strong> — centred at the bottom, changes colour (green → red)</li>
+  <li><strong>Weapon slots</strong> — bottom-left icons showing each weapon and its level</li>
+  <li><strong>Stat summary</strong> — bottom-right, only shows stats that have been boosted</li>
+</ul>
+
+<p>All HUD rendering is simple <code>love.graphics.rectangle()</code> and <code>love.graphics.print()</code> calls with careful positioning. No UI library needed.</p>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="files">14. File-by-File Reference</h2>
+
+<div class="diagram">
+<svg viewBox="0 0 720 520" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, sans-serif">
+  <rect width="720" height="520" rx="8" fill="#0d1117"/>
+
+  <text x="360" y="24" fill="#e6edf3" font-size="13" font-weight="bold" text-anchor="middle">Data flow through one frame of the game</text>
+
+  <!-- Input -->
+  <rect x="20" y="50" width="100" height="36" rx="5" fill="#21262d" stroke="#484f58"/>
+  <text x="70" y="73" fill="#c9d1d9" font-size="11" text-anchor="middle">Keyboard</text>
+
+  <!-- Player -->
+  <rect x="160" y="50" width="120" height="36" rx="5" fill="#238636" stroke="#3fb950"/>
+  <text x="220" y="73" fill="#fff" font-size="11" text-anchor="middle">player.lua</text>
+
+  <!-- Weapons -->
+  <rect x="160" y="120" width="120" height="36" rx="5" fill="#8b3a62" stroke="#f778ba"/>
+  <text x="220" y="143" fill="#fff" font-size="11" text-anchor="middle">weapons.lua</text>
+
+  <!-- Projectiles -->
+  <rect x="340" y="120" width="140" height="36" rx="5" fill="#553c9a" stroke="#a371f7"/>
+  <text x="410" y="143" fill="#fff" font-size="11" text-anchor="middle">projectiles [ ]</text>
+
+  <!-- Enemy -->
+  <rect x="540" y="120" width="120" height="36" rx="5" fill="#8b3a3a" stroke="#f85149"/>
+  <text x="600" y="143" fill="#fff" font-size="11" text-anchor="middle">enemy.lua</text>
+
+  <!-- Spawner -->
+  <rect x="540" y="50" width="120" height="36" rx="5" fill="#8b5e3c" stroke="#d29922"/>
+  <text x="600" y="73" fill="#fff" font-size="11" text-anchor="middle">spawner.lua</text>
+
+  <!-- Collision -->
+  <rect x="340" y="195" width="140" height="36" rx="5" fill="#6e4020" stroke="#d29922"/>
+  <text x="410" y="218" fill="#fff" font-size="11" text-anchor="middle">collision checks</text>
+
+  <!-- Particles -->
+  <rect x="540" y="195" width="120" height="36" rx="5" fill="#3a3a5c" stroke="#8b8bd6"/>
+  <text x="600" y="218" fill="#fff" font-size="11" text-anchor="middle">particles.lua</text>
+
+  <!-- Gems -->
+  <rect x="340" y="270" width="140" height="36" rx="5" fill="#1a2e1a" stroke="#3fb950"/>
+  <text x="410" y="293" fill="#fff" font-size="11" text-anchor="middle">gems.lua</text>
+
+  <!-- XP -->
+  <rect x="160" y="270" width="120" height="36" rx="5" fill="#2a2010" stroke="#e3b341"/>
+  <text x="220" y="293" fill="#fff" font-size="11" text-anchor="middle">XP → level up?</text>
+
+  <!-- Level Up -->
+  <rect x="160" y="340" width="120" height="36" rx="5" fill="#1a1a30" stroke="#a371f7"/>
+  <text x="220" y="363" fill="#fff" font-size="11" text-anchor="middle">levelup.lua</text>
+
+  <!-- Camera -->
+  <rect x="20" y="415" width="100" height="36" rx="5" fill="#2d4a6f" stroke="#58a6ff"/>
+  <text x="70" y="438" fill="#fff" font-size="11" text-anchor="middle">camera.lua</text>
+
+  <!-- Draw -->
+  <rect x="160" y="415" width="500" height="36" rx="5" fill="#21262d" stroke="#484f58"/>
+  <text x="410" y="438" fill="#c9d1d9" font-size="11" text-anchor="middle">love.draw(): background → gems → enemies → projectiles → player → particles → HUD</text>
+
+  <!-- Sprites -->
+  <rect x="20" y="470" width="100" height="36" rx="5" fill="#2d5a3a" stroke="#56d364"/>
+  <text x="70" y="493" fill="#fff" font-size="11" text-anchor="middle">sprites.lua</text>
+
+  <!-- HUD -->
+  <rect x="540" y="270" width="120" height="36" rx="5" fill="#4a3a2a" stroke="#d29922"/>
+  <text x="600" y="293" fill="#fff" font-size="11" text-anchor="middle">hud.lua</text>
+
+  <!-- Arrows -->
+  <g stroke="#484f58" stroke-width="1" marker-end="url(#arrowF)">
+    <line x1="120" y1="68" x2="158" y2="68"/>
+    <line x1="220" y1="86" x2="220" y2="118"/>
+    <line x1="280" y1="138" x2="338" y2="138"/>
+    <line x1="480" y1="138" x2="538" y2="138"/>
+    <line x1="600" y1="86" x2="600" y2="118"/>
+    <line x1="410" y1="156" x2="410" y2="193"/>
+    <line x1="480" y1="213" x2="538" y2="213"/>
+    <line x1="410" y1="231" x2="410" y2="268"/>
+    <line x1="338" y1="288" x2="282" y2="288"/>
+    <line x1="220" y1="306" x2="220" y2="338"/>
+    <line x1="220" y1="376" x2="220" y2="413"/>
+    <line x1="70"  y1="451" x2="158" y2="438"/>
+    <line x1="70"  y1="470" x2="70"  y2="451"/>
+    <line x1="600" y1="231" x2="600" y2="268"/>
+  </g>
+
+  <!-- Labels on arrows -->
+  <text x="135" y="58" fill="#8b949e" font-size="8">WASD</text>
+  <text x="232" y="106" fill="#8b949e" font-size="8">auto-fire</text>
+  <text x="305" y="130" fill="#8b949e" font-size="8">spawn</text>
+  <text x="508" y="130" fill="#8b949e" font-size="8">damage</text>
+  <text x="612" y="108" fill="#8b949e" font-size="8">creates</text>
+  <text x="422" y="180" fill="#8b949e" font-size="8">hit?</text>
+  <text x="504" y="206" fill="#8b949e" font-size="8">effects</text>
+  <text x="422" y="256" fill="#8b949e" font-size="8">drops</text>
+  <text x="296" y="280" fill="#8b949e" font-size="8">collect</text>
+  <text x="232" y="326" fill="#8b949e" font-size="8">enough XP?</text>
+  <text x="232" y="400" fill="#8b949e" font-size="8">choice made</text>
+
+  <defs>
+    <marker id="arrowF" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto">
+      <path d="M0,0 L7,2.5 L0,5" fill="#484f58"/>
+    </marker>
+  </defs>
+</svg>
+<p class="diagram-caption">Complete data flow for one frame: input → movement → weapons → collision → drops → XP → level-up → draw.</p>
+</div>
+
+<table style="width:100%; border-collapse:collapse; margin:20px 0;">
+<thead>
+<tr style="border-bottom:2px solid #30363d;">
+  <th style="text-align:left; padding:8px; color:#e6edf3;">File</th>
+  <th style="text-align:right; padding:8px; color:#8b949e;">Lines</th>
+  <th style="text-align:left; padding:8px; color:#8b949e;">What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr style="border-bottom:1px solid #21262d;"><td style="padding:8px;"><code>conf.lua</code></td><td style="text-align:right;padding:8px;">15</td><td style="padding:8px;">Sets window to 800×600, disables unused LÖVE modules</td></tr>
+<tr style="border-bottom:1px solid #21262d;"><td style="padding:8px;"><code>main.lua</code></td><td style="text-align:right;padding:8px;">228</td><td style="padding:8px;">Game loop hub — wires all modules, handles game states</td></tr>
+<tr style="border-bottom:1px solid #21262d;"><td style="padding:8px;"><code>player.lua</code></td><td style="text-align:right;padding:8px;">160</td><td style="padding:8px;">Movement, HP, XP, stat multipliers, invulnerability</td></tr>
+<tr style="border-bottom:1px solid #21262d;"><td style="padding:8px;"><code>enemy.lua</code></td><td style="text-align:right;padding:8px;">180</td><td style="padding:8px;">6 enemy types, chase AI, knockback, damage flash</td></tr>
+<tr style="border-bottom:1px solid #21262d;"><td style="padding:8px;"><code>spawner.lua</code></td><td style="text-align:right;padding:8px;">129</td><td style="padding:8px;">Timed difficulty tiers, off-screen spawning, swarm bursts</td></tr>
+<tr style="border-bottom:1px solid #21262d;"><td style="padding:8px;"><code>weapons.lua</code></td><td style="text-align:right;padding:8px;">522</td><td style="padding:8px;">6 weapons × 5 levels, projectile pool, collision, drawing</td></tr>
+<tr style="border-bottom:1px solid #21262d;"><td style="padding:8px;"><code>gems.lua</code></td><td style="text-align:right;padding:8px;">134</td><td style="padding:8px;">4-tier XP gems + health drops, magnetic pickup</td></tr>
+<tr style="border-bottom:1px solid #21262d;"><td style="padding:8px;"><code>levelup.lua</code></td><td style="text-align:right;padding:8px;">206</td><td style="padding:8px;">Choice generation (weapons/upgrades/passives), UI overlay</td></tr>
+<tr style="border-bottom:1px solid #21262d;"><td style="padding:8px;"><code>camera.lua</code></td><td style="text-align:right;padding:8px;">52</td><td style="padding:8px;">Smooth-follow camera, push/pop transform, bounds query</td></tr>
+<tr style="border-bottom:1px solid #21262d;"><td style="padding:8px;"><code>sprites.lua</code></td><td style="text-align:right;padding:8px;">326</td><td style="padding:8px;">Palette-indexed pixel grids → Images at runtime</td></tr>
+<tr style="border-bottom:1px solid #21262d;"><td style="padding:8px;"><code>particles.lua</code></td><td style="text-align:right;padding:8px;">122</td><td style="padding:8px;">Explosions, sparks, floating damage numbers</td></tr>
+<tr style="border-bottom:1px solid #21262d;"><td style="padding:8px;"><code>background.lua</code></td><td style="text-align:right;padding:8px;">48</td><td style="padding:8px;">Infinite tiled ground with colour variation</td></tr>
+<tr style="border-bottom:1px solid #21262d;"><td style="padding:8px;"><code>hud.lua</code></td><td style="text-align:right;padding:8px;">104</td><td style="padding:8px;">XP bar, HP bar, timer, weapon slots, stat readout</td></tr>
+<tr style="border-bottom:1px solid #21262d;"><td style="padding:8px;"><code>utils.lua</code></td><td style="text-align:right;padding:8px;">77</td><td style="padding:8px;">Distance, angle, clamp, lerp, collision, shuffle, sweep</td></tr>
+<tr style="font-weight:bold; border-top:2px solid #30363d;"><td style="padding:8px;">Total</td><td style="text-align:right;padding:8px;">2 303</td><td style="padding:8px;"></td></tr>
+</tbody>
+</table>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2 id="running">15. Running the Game Yourself</h2>
+<ol>
+  <li><strong>Install LÖVE</strong> — Download from <a href="https://love2d.org" target="_blank">love2d.org</a> (available for Windows, macOS, Linux)</li>
+  <li><strong>Get the code</strong> — Put all 14 <code>.lua</code> files in a single folder</li>
+  <li><strong>Run it:</strong></li>
+</ol>
+
+<pre><code><span class="cm"># macOS</span>
+/Applications/love.app/Contents/MacOS/love /path/to/folder
+
+<span class="cm"># Windows</span>
+love.exe C:\path\to\folder
+
+<span class="cm"># Linux</span>
+love /path/to/folder</code></pre>
+
+<div class="callout tip">
+  <strong>Want to experiment?</strong> Try these easy modifications:
+  <ul style="margin-top:8px;">
+    <li>Change <code>BASE_SPEED</code> in <code>player.lua</code> to make the player faster or slower</li>
+    <li>Add a new weapon by copying an existing one in <code>weapons.lua</code> and tweaking the <code>fire()</code> function</li>
+    <li>Edit the pixel grids in <code>sprites.lua</code> to redesign how enemies look</li>
+    <li>Adjust the <code>TIERS</code> table in <code>spawner.lua</code> to change when enemies appear</li>
+    <li>Tweak <code>self.difficulty</code> and <code>self.spawnRate</code> formulas in the spawner to make the game easier or harder</li>
+  </ul>
+</div>
+
+<p style="margin-top:48px; padding-top:24px; border-top:1px solid #21262d; color:#8b949e; text-align:center; font-size:0.9rem;">
+  Built with <a href="https://love2d.org">LÖVE2D</a> and Lua · 2 303 lines · Zero external dependencies
+</p>
+
+</div>
+</body>
+</html>

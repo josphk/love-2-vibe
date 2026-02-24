@@ -1,218 +1,217 @@
 -- player.lua
--- Player entity: movement, shooting, invincibility frames, drawing
+-- Player entity: WASD movement, mouse aiming, hitscan beam weapon.
+-- Click to enter bullet-time, click again to fire.
 
-local Utils = require("utils")
+local Utils      = require("utils")
+local Sprites    = require("sprites")
+local Background = require("background")
 
 local Player = {}
 Player.__index = Player
 
---------------------------------------------------------------------------------
--- Constants
---------------------------------------------------------------------------------
-local SPEED           = 280   -- pixels / sec (normal)
-local FOCUS_SPEED     = 130   -- pixels / sec (focus / slow)
-local SHOOT_INTERVAL  = 0.08  -- seconds between shots
-local HITBOX_RADIUS   = 3     -- tiny hitbox (bullet hell tradition)
-local GRAZE_RADIUS    = 18    -- graze detection ring
-local SPRITE_RADIUS   = 12    -- visual size
-local INVULN_TIME     = 2.0   -- seconds of invulnerability after a hit
-local MAX_LIVES       = 3
-local BOMB_COUNT      = 3     -- screen-clearing bombs
+local SPEED       = 210
+local HITBOX_R    = 3
+local SPRITE_R    = 14
+local GRAZE_R     = 20
+local MAX_LIVES   = 5
+local INVULN_TIME = 2.0
+local BEAM_WIDTH  = 14      -- hitscan corridor half-width
+local BEAM_DAMAGE = 40
+local BEAM_LENGTH = 1200
 
---------------------------------------------------------------------------------
--- Constructor
---------------------------------------------------------------------------------
-function Player.new(screenW, screenH)
+function Player.new()
+    local A = Background.ARENA
     local self = setmetatable({}, Player)
-    self.x = screenW / 2
-    self.y = screenH * 0.85
-    self.screenW = screenW
-    self.screenH = screenH
-    self.speed = SPEED
-    self.focusSpeed = FOCUS_SPEED
-    self.hitboxRadius = HITBOX_RADIUS
-    self.grazeRadius = GRAZE_RADIUS
-    self.spriteRadius = SPRITE_RADIUS
+    self.x = A.x + A.w / 2
+    self.y = A.y + A.h * 0.75
+    self.hitboxR = HITBOX_R
+    self.spriteR = SPRITE_R
+    self.grazeR  = GRAZE_R
 
     self.lives = MAX_LIVES
-    self.bombs = BOMB_COUNT
     self.score = 0
-    self.graze = 0               -- graze counter (near misses)
-    self.power = 1               -- power level 1-4 (affects shot spread)
+    self.graze = 0
 
-    self.shootTimer = 0
-    self.invulnTimer = 0         -- >0 means invulnerable
+    self.aimAngle = -math.pi / 2    -- default: aim up
+    self.aimWorldX = self.x
+    self.aimWorldY = self.y - 100
+    self.facing = 1
+
+    self.invulnTimer = 0
+    self.age = 0
     self.dead = false
-    self.focused = false         -- shift held = focused (slow + visible hitbox)
-
-    -- Visual flash timer
-    self.flashTimer = 0
-
     return self
 end
 
---------------------------------------------------------------------------------
--- Update
---------------------------------------------------------------------------------
-function Player.update(self, dt)
+function Player:update(dt, camera)
     if self.dead then return end
+    self.age = self.age + dt
 
-    -- Movement input
+    -- WASD movement
     local dx, dy = 0, 0
-    if love.keyboard.isDown("left", "a")  then dx = dx - 1 end
-    if love.keyboard.isDown("right", "d") then dx = dx + 1 end
-    if love.keyboard.isDown("up", "w")    then dy = dy - 1 end
-    if love.keyboard.isDown("down", "s")  then dy = dy + 1 end
-
-    -- Normalize diagonal
+    if love.keyboard.isDown("a", "left")  then dx = dx - 1 end
+    if love.keyboard.isDown("d", "right") then dx = dx + 1 end
+    if love.keyboard.isDown("w", "up")    then dy = dy - 1 end
+    if love.keyboard.isDown("s", "down")  then dy = dy + 1 end
     if dx ~= 0 and dy ~= 0 then
-        local inv = 1 / math.sqrt(2)
-        dx = dx * inv
-        dy = dy * inv
+        local inv = 1 / math.sqrt(2); dx, dy = dx * inv, dy * inv
     end
 
-    -- Focus mode (hold left shift)
-    self.focused = love.keyboard.isDown("lshift", "rshift")
-    local spd = self.focused and self.focusSpeed or self.speed
+    self.x = self.x + dx * SPEED * dt
+    self.y = self.y + dy * SPEED * dt
 
-    self.x = self.x + dx * spd * dt
-    self.y = self.y + dy * spd * dt
+    -- Clamp to arena
+    local A = Background.ARENA
+    self.x = Utils.clamp(self.x, A.x + SPRITE_R, A.x + A.w - SPRITE_R)
+    self.y = Utils.clamp(self.y, A.y + SPRITE_R, A.y + A.h - SPRITE_R)
 
-    -- Keep inside screen with small margin
-    local margin = self.spriteRadius
-    self.x = Utils.clamp(self.x, margin, self.screenW - margin)
-    self.y = Utils.clamp(self.y, margin, self.screenH - margin)
+    -- Aim toward mouse (convert screen→world)
+    local mx, my = love.mouse.getPosition()
+    self.aimWorldX, self.aimWorldY = camera:screenToWorld(mx, my)
+    self.aimAngle = Utils.angleTo(self.x, self.y, self.aimWorldX, self.aimWorldY)
 
-    -- Timers
-    if self.invulnTimer > 0 then
-        self.invulnTimer = self.invulnTimer - dt
-    end
-    if self.flashTimer > 0 then
-        self.flashTimer = self.flashTimer - dt
-    end
-    self.shootTimer = self.shootTimer - dt
+    -- Facing
+    if self.aimWorldX < self.x then self.facing = -1 else self.facing = 1 end
+
+    -- Invuln timer
+    if self.invulnTimer > 0 then self.invulnTimer = self.invulnTimer - dt end
 end
 
 --------------------------------------------------------------------------------
--- Shooting – returns a table of bullet descriptors (or nil)
+-- Fire beam — returns { x1,y1, x2,y2, bulletsDestroyed, enemiesHit, score }
 --------------------------------------------------------------------------------
-function Player.shoot(self)
+function Player:fireBeam(bulletPool, enemies, particles)
     if self.dead then return nil end
-    if not love.keyboard.isDown("space", "z") then return nil end
-    if self.shootTimer > 0 then return nil end
 
-    self.shootTimer = SHOOT_INTERVAL
-    local bullets = {}
+    local angle = self.aimAngle
+    local cosA, sinA = math.cos(angle), math.sin(angle)
+    local x2 = self.x + cosA * BEAM_LENGTH
+    local y2 = self.y + sinA * BEAM_LENGTH
 
-    -- Base shot: two parallel bullets
-    local bspeed = 800
-    table.insert(bullets, { x = self.x - 8, y = self.y - 10, vx = 0, vy = -bspeed })
-    table.insert(bullets, { x = self.x + 8, y = self.y - 10, vx = 0, vy = -bspeed })
+    local destroyed = 0
+    local hit = 0
+    local score = 0
 
-    -- Power >= 2: add angled side shots
-    if self.power >= 2 then
-        local ang = 0.12
-        table.insert(bullets, { x = self.x - 14, y = self.y - 6,
-            vx = -math.sin(ang) * bspeed, vy = -math.cos(ang) * bspeed })
-        table.insert(bullets, { x = self.x + 14, y = self.y - 6,
-            vx =  math.sin(ang) * bspeed, vy = -math.cos(ang) * bspeed })
-    end
-
-    -- Power >= 3: wider spread
-    if self.power >= 3 then
-        local ang = 0.25
-        table.insert(bullets, { x = self.x - 20, y = self.y - 2,
-            vx = -math.sin(ang) * bspeed, vy = -math.cos(ang) * bspeed })
-        table.insert(bullets, { x = self.x + 20, y = self.y - 2,
-            vx =  math.sin(ang) * bspeed, vy = -math.cos(ang) * bspeed })
-    end
-
-    -- Power 4: homing side missiles (approximated with angled shots)
-    if self.power >= 4 then
-        local ang = 0.40
-        table.insert(bullets, { x = self.x - 26, y = self.y,
-            vx = -math.sin(ang) * bspeed * 0.9, vy = -math.cos(ang) * bspeed * 0.9 })
-        table.insert(bullets, { x = self.x + 26, y = self.y,
-            vx =  math.sin(ang) * bspeed * 0.9, vy = -math.cos(ang) * bspeed * 0.9 })
-    end
-
-    return bullets
-end
-
---------------------------------------------------------------------------------
--- Take damage – returns true if the player actually got hit
---------------------------------------------------------------------------------
-function Player.hit(self)
-    if self.dead then return false end
-    if self.invulnTimer > 0 then return false end
-
-    self.lives = self.lives - 1
-    self.invulnTimer = INVULN_TIME
-    self.flashTimer = INVULN_TIME
-
-    if self.lives <= 0 then
-        self.dead = true
-    end
-
-    -- Reset position on hit
-    self.x = self.screenW / 2
-    self.y = self.screenH * 0.85
-
-    return true
-end
-
---------------------------------------------------------------------------------
--- Bomb – clears screen, returns true if a bomb was used
---------------------------------------------------------------------------------
-function Player.bomb(self)
-    if self.dead then return false end
-    if self.bombs <= 0 then return false end
-    self.bombs = self.bombs - 1
-    self.invulnTimer = math.max(self.invulnTimer, 1.5) -- brief invuln with bomb
-    return true
-end
-
---------------------------------------------------------------------------------
--- Draw
---------------------------------------------------------------------------------
-function Player.draw(self)
-    if self.dead then return end
-
-    -- Flicker during invulnerability
-    if self.invulnTimer > 0 then
-        if math.floor(self.invulnTimer * 15) % 2 == 0 then
-            return -- skip frame for flicker effect
+    -- Destroy enemy bullets in beam path
+    for _, b in ipairs(bulletPool.list) do
+        if not b.dead then
+            local d = Utils.pointToSegmentDist(b.x, b.y, self.x, self.y, x2, y2)
+            if d <= BEAM_WIDTH + b.radius then
+                b.dead = true
+                destroyed = destroyed + 1
+                particles:spark(b.x, b.y, b.r, b.g, b.b)
+            end
         end
     end
 
-    -- Ship body (triangle)
-    love.graphics.setColor(0.3, 0.7, 1.0, 1)
-    local r = self.spriteRadius
-    love.graphics.polygon("fill",
-        self.x, self.y - r * 1.4,
-        self.x - r, self.y + r,
-        self.x + r, self.y + r
-    )
-
-    -- Ship highlight
-    love.graphics.setColor(0.6, 0.9, 1.0, 1)
-    love.graphics.polygon("line",
-        self.x, self.y - r * 1.4,
-        self.x - r, self.y + r,
-        self.x + r, self.y + r
-    )
-
-    -- Engine glow
-    love.graphics.setColor(1, 0.6, 0.2, 0.8)
-    love.graphics.circle("fill", self.x, self.y + r + 2, 4 + math.random() * 2)
-
-    -- Hitbox indicator (visible in focus mode)
-    if self.focused then
-        love.graphics.setColor(1, 1, 1, 0.9)
-        love.graphics.circle("fill", self.x, self.y, self.hitboxRadius)
-        love.graphics.setColor(1, 1, 1, 0.25)
-        love.graphics.circle("line", self.x, self.y, self.grazeRadius)
+    -- Damage enemies in beam path
+    for _, e in ipairs(enemies) do
+        if not e.dead then
+            local d = Utils.pointToSegmentDist(e.x, e.y, self.x, self.y, x2, y2)
+            if d <= BEAM_WIDTH + e.radius then
+                local killed = e:takeDamage(BEAM_DAMAGE)
+                hit = hit + 1
+                particles:burst(e.x, e.y, e.cr, e.cg, e.cb, 8, 80)
+                if killed then
+                    score = score + e.score
+                    particles:burst(e.x, e.y, 1, 0.9, 0.5, 18, 140)
+                end
+            end
+        end
     end
+
+    -- Scoring for bullet destruction
+    score = score + destroyed * 15
+    if destroyed >= 5 then
+        score = score + destroyed * 10  -- combo bonus
+    end
+
+    -- Visual beam
+    particles:beam(self.x, self.y, x2, y2, destroyed)
+
+    return {
+        x1 = self.x, y1 = self.y, x2 = x2, y2 = y2,
+        destroyed = destroyed, hit = hit, score = score,
+    }
+end
+
+--------------------------------------------------------------------------------
+-- Take a hit
+--------------------------------------------------------------------------------
+function Player:hit()
+    if self.dead then return false end
+    if self.invulnTimer > 0 then return false end
+    self.lives = self.lives - 1
+    self.invulnTimer = INVULN_TIME
+    if self.lives <= 0 then self.dead = true end
+    return true
+end
+
+--------------------------------------------------------------------------------
+-- Draw (inside camera transform)
+--------------------------------------------------------------------------------
+function Player:draw(btActive)
+    if self.dead then return end
+
+    -- Flicker during invuln
+    if self.invulnTimer > 0 and math.floor(self.invulnTimer * 12) % 2 == 0 then
+        return
+    end
+
+    -- Shadow
+    love.graphics.setColor(0, 0, 0, 0.35)
+    love.graphics.ellipse("fill", self.x, self.y + SPRITE_R * 0.5, SPRITE_R * 0.7, SPRITE_R * 0.25)
+
+    -- Sprite
+    love.graphics.setColor(1, 1, 1, 1)
+    Sprites.draw("player", self.x, self.y, self.age, self.facing)
+
+    -- Weapon direction indicator (short line)
+    local cosA, sinA = math.cos(self.aimAngle), math.sin(self.aimAngle)
+    love.graphics.setColor(0.7, 0.85, 1.0, 0.6)
+    love.graphics.setLineWidth(2)
+    love.graphics.line(
+        self.x + cosA * 10, self.y + sinA * 10,
+        self.x + cosA * 22, self.y + sinA * 22)
+    love.graphics.setLineWidth(1)
+
+    -- Hitbox (always visible as a tiny dot)
+    love.graphics.setColor(1, 1, 1, 0.8)
+    love.graphics.circle("fill", self.x, self.y, HITBOX_R)
+end
+
+--- Draw aim line (call during bullet time, inside camera transform).
+function Player:drawAimLine()
+    if self.dead then return end
+
+    local cosA, sinA = math.cos(self.aimAngle), math.sin(self.aimAngle)
+    local ex = self.x + cosA * BEAM_LENGTH
+    local ey = self.y + sinA * BEAM_LENGTH
+
+    -- Dashed line
+    local dashLen, gapLen = 12, 8
+    local totalDist = BEAM_LENGTH
+    love.graphics.setLineWidth(1.5)
+    for d = 20, totalDist, dashLen + gapLen do
+        local x1 = self.x + cosA * d
+        local y1 = self.y + sinA * d
+        local dEnd = math.min(d + dashLen, totalDist)
+        local x2 = self.x + cosA * dEnd
+        local y2 = self.y + sinA * dEnd
+        local alpha = math.max(0.05, 0.5 - d / totalDist * 0.5)
+        love.graphics.setColor(0.6, 0.8, 1.0, alpha)
+        love.graphics.line(x1, y1, x2, y2)
+    end
+    love.graphics.setLineWidth(1)
+
+    -- Beam width preview (faint corridor)
+    love.graphics.setColor(0.4, 0.6, 1.0, 0.04)
+    local perpX, perpY = -sinA * BEAM_WIDTH, cosA * BEAM_WIDTH
+    love.graphics.polygon("fill",
+        self.x + perpX, self.y + perpY,
+        ex + perpX, ey + perpY,
+        ex - perpX, ey - perpY,
+        self.x - perpX, self.y - perpY)
 end
 
 return Player
