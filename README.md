@@ -45,6 +45,18 @@ A **bullet hell with bullet-time aiming** inspired by Arco. Click to slow time t
 
 ---
 
+### 🔫 [tactical-shooter/](tactical-shooter/)
+An **isometric tactical stealth shooter** inspired by Intravenous. Move on an isometric grid, use a FOV cone and sight line to aim, and take down enemies that patrol, chase when they see you, and retreat when low on HP.
+
+- 1024×720 isometric grid (24×18 tiles)
+- 4 enemy types (Grunt, Scout, Heavy, Sniper) with distinct HP, speed, view range, and damage
+- Line-of-sight and raycast for shooting and enemy vision; sight lines drawn for player and enemies
+- Damage numbers, win/lose on kill-all or death
+
+**Controls:** WASD move · Mouse aim · Left-click shoot · R restart
+
+---
+
 ## Running
 
 Install [LÖVE2D](https://love2d.org) (11.4+), then:
@@ -54,6 +66,7 @@ Install [LÖVE2D](https://love2d.org) (11.4+), then:
 love bullet-hell/
 love vampire-survivors/
 love chronobullet/
+love tactical-shooter/
 ```
 
 ## Project Structure
@@ -70,17 +83,21 @@ love-2-vibe/
 │   ├── how-it-was-made.html
 │   ├── main.lua
 │   └── ... (14 files, ~2300 lines)
-└── chronobullet/         # Bullet-time bullet hell
+├── chronobullet/         # Bullet-time bullet hell
+│   ├── AGENTS.md
+│   ├── main.lua
+│   └── ... (14 files, ~1800 lines)
+└── tactical-shooter/     # Isometric tactical stealth shooter
     ├── AGENTS.md
     ├── main.lua
-    └── ... (14 files, ~1800 lines)
+    └── ... (9 files, ~600 lines)
 ```
 
 Each game is a standalone LÖVE2D project — just point `love` at any folder. Each `AGENTS.md` provides detailed context about the game's architecture, mechanics, and codebase for AI coding agents.
 
 ## Shared Patterns
 
-All three games share common design principles despite being different genres:
+All four games share common design principles despite being different genres:
 
 - **No external assets** — all sprites generated at runtime via `love.image.newImageData()`
 - **Modular Lua files** — each system (`player`, `enemy`, `weapons`, etc.) is a separate `require()`-able module
@@ -92,5 +109,5 @@ All three games share common design principles despite being different genres:
 
 - **Language:** Lua
 - **Framework:** [LÖVE2D](https://love2d.org) 11.4
-- **Total:** ~6000 lines across 40 files
+- **Total:** ~6600 lines across 49 files
 - **Dependencies:** None
