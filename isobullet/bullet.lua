@@ -109,9 +109,13 @@ function Bullets:draw(timeScale)
             -- Dim with bounces
             local alpha = 1.0 - b.bounces * 0.15
 
+            -- Outer neon glow
+            love.graphics.setColor(b.r, b.g, b.b, 0.1 * alpha)
+            love.graphics.circle("fill", sx, sy, pr * 4)
+
             -- Glow halo
-            love.graphics.setColor(b.r, b.g, b.b, 0.2 * alpha)
-            love.graphics.circle("fill", sx, sy, pr * 2.5)
+            love.graphics.setColor(b.r, b.g, b.b, 0.3 * alpha)
+            love.graphics.circle("fill", sx, sy, pr * 2.2)
 
             -- Motion trail during slow-mo
             if slow then
@@ -129,12 +133,12 @@ function Bullets:draw(timeScale)
             end
 
             -- Core
-            love.graphics.setColor(b.r, b.g, b.b, 0.85 * alpha)
+            love.graphics.setColor(b.r, b.g, b.b, 0.95 * alpha)
             love.graphics.circle("fill", sx, sy, pr)
 
             -- Bright center
-            love.graphics.setColor(1, 1, 1, 0.5 * alpha)
-            love.graphics.circle("fill", sx, sy, pr * 0.4)
+            love.graphics.setColor(1, 1, 1, 0.7 * alpha)
+            love.graphics.circle("fill", sx, sy, pr * 0.5)
 
             -- Bounce indicator ring
             if b.bounces > 0 then

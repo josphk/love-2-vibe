@@ -4,6 +4,7 @@
 
 local Map   = require("map")
 local Input = require("input")
+local CRT   = require("crt")
 
 local HUD = {}
 
@@ -150,7 +151,7 @@ function HUD.drawCrosshair(btActive, player)
             my = psy - 6 + math.sin(player._lastAimAngle) * dist
         end
     else
-        mx, my = love.mouse.getPosition()
+        mx, my = CRT.getMousePosition()
     end
 
     if btActive then
