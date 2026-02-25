@@ -62,17 +62,20 @@ end
 --------------------------------------------------------------------------------
 function HUD.draw(player, spawner, bt, screenW, screenH)
     local font = love.graphics.getFont()
+    local uiScale = math.min(screenW / 1024, screenH / 720)
+    local lm = math.floor(12 * uiScale)  -- left margin
+    local tm = math.floor(10 * uiScale)  -- top margin
 
     ---- Lives (top-left) ----
     love.graphics.setColor(1, 0.35, 0.3, 1)
     local livesStr = "LIVES "
     for _ = 1, player.lives do livesStr = livesStr .. "♥ " end
-    love.graphics.print(livesStr, 12, 10)
+    love.graphics.print(livesStr, lm, tm)
 
     ---- Score (top-right) ----
     love.graphics.setColor(1, 1, 1, 0.9)
     local scoreStr = string.format("%08d", player.score)
-    love.graphics.print(scoreStr, screenW - font:getWidth(scoreStr) - 12, 10)
+    love.graphics.print(scoreStr, screenW - font:getWidth(scoreStr) - lm, tm)
 
     ---- Wave (top-center) ----
     love.graphics.setColor(1, 1, 0.5, 0.9)
@@ -84,17 +87,17 @@ function HUD.draw(player, spawner, bt, screenW, screenH)
     else
         waveStr = string.format("WAVE %d", spawner.wave)
     end
-    love.graphics.print(waveStr, (screenW - font:getWidth(waveStr)) / 2, 10)
+    love.graphics.print(waveStr, (screenW - font:getWidth(waveStr)) / 2, tm)
 
     ---- Graze (below lives) ----
     love.graphics.setColor(0.7, 0.7, 1.0, 0.7)
-    love.graphics.print(string.format("GRAZE %d", player.graze), 12, 28)
+    love.graphics.print(string.format("GRAZE %d", player.graze), lm, math.floor(28 * uiScale))
 
     ---- Bullet-time meter (bottom-center) ----
-    local meterW = 200
-    local meterH = 8
+    local meterW = math.floor(200 * uiScale)
+    local meterH = math.max(4, math.floor(8 * uiScale))
     local mx = (screenW - meterW) / 2
-    local my = screenH - 28
+    local my = screenH - math.floor(28 * uiScale)
 
     -- Background
     love.graphics.setColor(0.1, 0.1, 0.15, 0.8)
@@ -111,16 +114,16 @@ function HUD.draw(player, spawner, bt, screenW, screenH)
     -- Label
     love.graphics.setColor(0.7, 0.8, 1.0, 0.6)
     local label = bt.active and "▶ PRISM BEAM" or "CHRONO"
-    love.graphics.print(label, mx + (meterW - font:getWidth(label)) / 2, my - 16)
+    love.graphics.print(label, mx + (meterW - font:getWidth(label)) / 2, my - math.floor(16 * uiScale))
 
     ---- Controls hint (fades out) ----
     if spawner.gameTime < 14 then
         local a = math.max(0, 1 - spawner.gameTime / 14)
         love.graphics.setColor(0.6, 0.6, 0.6, a * 0.6)
         if Input.isGamepadAiming() then
-            love.graphics.print("L-Stick: move  |  R2: slow time → aim → fire  |  L2: cancel", 12, screenH - 22)
+            love.graphics.print("L-Stick: move  |  R2: slow time → aim → fire  |  L2: cancel", lm, screenH - math.floor(22 * uiScale))
         else
-            love.graphics.print("WASD: move  |  LMB: slow time → aim ricochet → fire  |  RMB: cancel", 12, screenH - 22)
+            love.graphics.print("WASD: move  |  LMB: slow time → aim ricochet → fire  |  RMB: cancel", lm, screenH - math.floor(22 * uiScale))
         end
     end
 end
@@ -130,18 +133,19 @@ end
 --------------------------------------------------------------------------------
 function HUD.drawCrosshair(btActive, player)
     local mx, my
+    local uiScale = math.min(Map.screenW / 1024, Map.screenH / 720)
 
     if Input.isGamepadAiming() and player then
         -- Project crosshair from player's screen position along stick angle
         local psx, psy = Map.gridToScreen(player.x, player.y)
         local aim = Input.getGamepadAim()
         if aim then
-            local dist = btActive and 120 or 80
+            local dist = (btActive and 120 or 80) * uiScale
             mx = psx + math.cos(aim) * dist
             my = psy - 6 + math.sin(aim) * dist
         else
             -- Stick centered: use last aim angle
-            local dist = btActive and 120 or 80
+            local dist = (btActive and 120 or 80) * uiScale
             mx = psx + math.cos(player._lastAimAngle) * dist
             my = psy - 6 + math.sin(player._lastAimAngle) * dist
         end
@@ -151,29 +155,32 @@ function HUD.drawCrosshair(btActive, player)
 
     if btActive then
         -- Large crosshair during bullet-time
-        local s = 14
+        local s = math.floor(14 * uiScale)
+        local gap = math.floor(5 * uiScale)
+        local ring = math.floor(20 * uiScale)
         love.graphics.setColor(0.5, 0.8, 1.0, 0.8)
         love.graphics.setLineWidth(2)
-        love.graphics.line(mx - s, my, mx - 5, my)
-        love.graphics.line(mx + 5, my, mx + s, my)
-        love.graphics.line(mx, my - s, mx, my - 5)
-        love.graphics.line(mx, my + 5, mx, my + s)
+        love.graphics.line(mx - s, my, mx - gap, my)
+        love.graphics.line(mx + gap, my, mx + s, my)
+        love.graphics.line(mx, my - s, mx, my - gap)
+        love.graphics.line(mx, my + gap, mx, my + s)
         love.graphics.setLineWidth(1)
         -- Center dot
         love.graphics.setColor(1, 1, 1, 0.9)
         love.graphics.circle("fill", mx, my, 2)
         -- Outer ring
         love.graphics.setColor(0.4, 0.6, 1.0, 0.3)
-        love.graphics.circle("line", mx, my, 20)
+        love.graphics.circle("line", mx, my, ring)
     else
         -- Small crosshair
-        local s = 7
+        local s = math.floor(7 * uiScale)
+        local gap = math.floor(2 * uiScale)
         love.graphics.setColor(1, 1, 1, 0.6)
         love.graphics.setLineWidth(1)
-        love.graphics.line(mx - s, my, mx - 2, my)
-        love.graphics.line(mx + 2, my, mx + s, my)
-        love.graphics.line(mx, my - s, mx, my - 2)
-        love.graphics.line(mx, my + 2, mx, my + s)
+        love.graphics.line(mx - s, my, mx - gap, my)
+        love.graphics.line(mx + gap, my, mx + s, my)
+        love.graphics.line(mx, my - s, mx, my - gap)
+        love.graphics.line(mx, my + gap, mx, my + s)
         love.graphics.circle("fill", mx, my, 1)
     end
 end
