@@ -72,6 +72,16 @@ An **isometric bullet hell with bullet-time and bullet reflection**. Combines th
 
 ---
 
+### 🃏 [isobullet-cards/](isobullet-cards/)
+A **fork of isobullet** — same isometric bullet hell with bullet-time and reflection. This variant is the base for card-related mechanics (to be developed).
+
+- Same 1024×720 isometric grid, 6 enemy types, reflecting beam, bullet-time
+- Run: `love isobullet-cards/`
+
+**Controls:** Same as isobullet (WASD move · LMB slow time → aim → fire · RMB cancel)
+
+---
+
 ## Running
 
 Install [LÖVE2D](https://love2d.org) (11.4+), then:
@@ -83,6 +93,7 @@ love vampire-survivors/
 love chronobullet/
 love tactical-shooter/
 love isobullet/
+love isobullet-cards/
 ```
 
 ## Project Structure
@@ -107,18 +118,23 @@ love-2-vibe/
 │   ├── AGENTS.md
 │   ├── main.lua
 │   └── ... (9 files, ~600 lines)
-└── isobullet/            # Isometric bullet hell with reflection
+├── isobullet/            # Isometric bullet hell with reflection
+│   ├── AGENTS.md
+│   ├── LOG.md
+│   ├── main.lua
+│   └── ... (14 files, ~2200 lines)
+└── isobullet-cards/      # Fork of isobullet for card mechanics
     ├── AGENTS.md
     ├── LOG.md
     ├── main.lua
-    └── ... (14 files, ~2200 lines)
+    └── ... (14 files, same as isobullet)
 ```
 
 Each game is a standalone LÖVE2D project — just point `love` at any folder. Each `AGENTS.md` provides detailed context about the game's architecture, mechanics, and codebase for AI coding agents.
 
 ## Shared Patterns
 
-All five games share common design principles despite being different genres:
+All six games share common design principles despite being different genres:
 
 - **No external assets** — all sprites generated at runtime via `love.image.newImageData()`
 - **Modular Lua files** — each system (`player`, `enemy`, `weapons`, etc.) is a separate `require()`-able module
