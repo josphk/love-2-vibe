@@ -28,6 +28,13 @@ function Map.gridToScreen(gx, gy)
     return sx, sy
 end
 
+--- Convert a screen-space direction vector to grid-space.
+function Map.screenDirToGridDir(sdx, sdy)
+    local gdx = sdx / Map.TILE_W + sdy / Map.TILE_H
+    local gdy = -sdx / Map.TILE_W + sdy / Map.TILE_H
+    return gdx, gdy
+end
+
 function Map.screenToGrid(sx, sy)
     local rx = (sx - Map.screenW / 2) / (Map.TILE_W / 2)
     local ry = (sy - Map.screenH / 2 + Map.CAMERA_OFFSET_Y) / (Map.TILE_H / 2)

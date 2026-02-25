@@ -22,6 +22,7 @@ local BulletTime = require("bullettime")
 local Background = require("background")
 local HUD        = require("hud")
 local Utils      = require("utils")
+local Input      = require("input")
 
 --------------------------------------------------------------------------------
 -- State
@@ -58,67 +59,97 @@ function love.load()
 
     Map.setScreenSize(SCREEN_W, SCREEN_H)
     Map.build()
+    Input.init()
     camera = Camera.new(SCREEN_W, SCREEN_H)
     resetGame()
 end
 
+--------------------------------------------------------------------------------
+-- Extracted action handlers (shared by mouse + gamepad)
+--------------------------------------------------------------------------------
+local function handleFire()
+    if gameOver or player.dead then return end
+    if bt.active then
+        ---- FIRE REFLECTING BEAM ----
+        local result = player:fireBeam(bullets, spawner.enemies, particles)
+        if result then
+            player.score = player.score + result.score
+            camera:shake(6, 0.2)
+
+            -- Hitstop for big kills
+            if result.destroyed >= 5 or result.hit >= 1 then
+                bt:triggerHitstop(0.06)
+            end
+
+            -- Meter refill from kills
+            bt:addMeter(result.hit * 12 + result.destroyed * 1.5)
+
+            -- Combo text
+            if result.destroyed >= 5 then
+                particles:text(player.x, player.y - 1,
+                    result.destroyed .. " BULLETS!", 0.5, 0.9, 1.0)
+            end
+            if result.hit >= 2 then
+                particles:text(player.x, player.y - 2,
+                    "MULTI-KILL!", 1.0, 0.9, 0.3)
+            end
+
+            -- Ricochet bonus text
+            if #result.segments > 1 and result.hit > 0 then
+                particles:text(player.x, player.y - 3,
+                    "RICOCHET!", 0.8, 0.6, 1.0)
+                player.score = player.score + #result.segments * 50
+            end
+        end
+
+        -- Exit bullet-time
+        bt:deactivate()
+        camera.targetZoom = 1.0
+    else
+        ---- ENTER BULLET-TIME ----
+        if bt:activate() then
+            camera.targetZoom = 1.03
+        end
+    end
+end
+
+local function handleCancel()
+    if gameOver then return end
+    if bt.active then
+        bt:deactivate()
+        camera.targetZoom = 1.0
+    end
+end
+
 function love.keypressed(key)
+    Input.lastDevice = "keyboard"
     if key == "escape" then love.event.quit() end
     if key == "r" and gameOver then resetGame() end
 end
 
 function love.mousepressed(x, y, button)
-    if gameOver then return end
-
-    if button == 1 then   -- Left click
-        if bt.active then
-            ---- FIRE REFLECTING BEAM ----
-            local result = player:fireBeam(bullets, spawner.enemies, particles)
-            if result then
-                player.score = player.score + result.score
-                camera:shake(6, 0.2)
-
-                -- Hitstop for big kills
-                if result.destroyed >= 5 or result.hit >= 1 then
-                    bt:triggerHitstop(0.06)
-                end
-
-                -- Meter refill from kills
-                bt:addMeter(result.hit * 12 + result.destroyed * 1.5)
-
-                -- Combo text
-                if result.destroyed >= 5 then
-                    particles:text(player.x, player.y - 1,
-                        result.destroyed .. " BULLETS!", 0.5, 0.9, 1.0)
-                end
-                if result.hit >= 2 then
-                    particles:text(player.x, player.y - 2,
-                        "MULTI-KILL!", 1.0, 0.9, 0.3)
-                end
-
-                -- Ricochet bonus text
-                if #result.segments > 1 and result.hit > 0 then
-                    particles:text(player.x, player.y - 3,
-                        "RICOCHET!", 0.8, 0.6, 1.0)
-                    player.score = player.score + #result.segments * 50
-                end
-            end
-
-            -- Exit bullet-time
-            bt:deactivate()
-            camera.targetZoom = 1.0
-        else
-            ---- ENTER BULLET-TIME ----
-            if bt:activate() then
-                camera.targetZoom = 1.03
-            end
-        end
-    elseif button == 2 then   -- Right click: cancel
-        if bt.active then
-            bt:deactivate()
-            camera.targetZoom = 1.0
-        end
+    Input.lastDevice = "keyboard"
+    if button == 1 then
+        handleFire()
+    elseif button == 2 then
+        handleCancel()
     end
+end
+
+function love.mousemoved()
+    Input.lastDevice = "keyboard"
+end
+
+function love.joystickadded(joystick)
+    Input.joystickadded(joystick)
+end
+
+function love.joystickremoved(joystick)
+    Input.joystickremoved(joystick)
+end
+
+function love.gamepadpressed(joystick, button)
+    Input.gamepadpressed(joystick, button)
 end
 
 --------------------------------------------------------------------------------
@@ -126,6 +157,15 @@ end
 --------------------------------------------------------------------------------
 function love.update(realDt)
     realDt = math.min(realDt, 1 / 30)
+
+    -- Gamepad trigger edge detection
+    Input.updateTriggers()
+
+    -- Process gamepad action flags
+    if Input.fireJustPressed    then handleFire() end
+    if Input.cancelJustPressed  then handleCancel() end
+    if Input.restartJustPressed and gameOver then resetGame() end
+    if Input.quitJustPressed    then love.event.quit() end
 
     -- Bullet-time system (runs on real time)
     bt:update(realDt)
@@ -260,7 +300,7 @@ function love.draw()
     HUD.draw(player, spawner, bt, SCREEN_W, SCREEN_H)
 
     -- Custom crosshair
-    HUD.drawCrosshair(bt.active)
+    HUD.drawCrosshair(bt.active, player)
 
     -- Game over
     if gameOver then
@@ -279,7 +319,9 @@ function love.draw()
         love.graphics.print(t2, (SCREEN_W - font:getWidth(t2)) / 2, SCREEN_H / 2 - 10)
 
         love.graphics.setColor(0.7, 0.7, 0.7, 0.5 + 0.4 * math.sin(love.timer.getTime() * 3))
-        local t3 = "Press R to restart"
+        local t3 = Input.isGamepadAiming() and "Press X to restart" or "Press R to restart"
         love.graphics.print(t3, (SCREEN_W - font:getWidth(t3)) / 2, SCREEN_H / 2 + 25)
     end
+
+    Input.endFrame()
 end

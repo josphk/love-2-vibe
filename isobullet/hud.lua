@@ -2,7 +2,8 @@
 -- Screen-space HUD: lives, score, wave, graze, bullet-time meter,
 -- sight line, damage numbers, custom crosshair.
 
-local Map = require("map")
+local Map   = require("map")
+local Input = require("input")
 
 local HUD = {}
 
@@ -116,15 +117,37 @@ function HUD.draw(player, spawner, bt, screenW, screenH)
     if spawner.gameTime < 14 then
         local a = math.max(0, 1 - spawner.gameTime / 14)
         love.graphics.setColor(0.6, 0.6, 0.6, a * 0.6)
-        love.graphics.print("WASD: move  |  LMB: slow time → aim ricochet → fire  |  RMB: cancel", 12, screenH - 22)
+        if Input.isGamepadAiming() then
+            love.graphics.print("L-Stick: move  |  R2: slow time → aim → fire  |  L2: cancel", 12, screenH - 22)
+        else
+            love.graphics.print("WASD: move  |  LMB: slow time → aim ricochet → fire  |  RMB: cancel", 12, screenH - 22)
+        end
     end
 end
 
 --------------------------------------------------------------------------------
 -- Custom crosshair (call last, in screen space)
 --------------------------------------------------------------------------------
-function HUD.drawCrosshair(btActive)
-    local mx, my = love.mouse.getPosition()
+function HUD.drawCrosshair(btActive, player)
+    local mx, my
+
+    if Input.isGamepadAiming() and player then
+        -- Project crosshair from player's screen position along stick angle
+        local psx, psy = Map.gridToScreen(player.x, player.y)
+        local aim = Input.getGamepadAim()
+        if aim then
+            local dist = btActive and 120 or 80
+            mx = psx + math.cos(aim) * dist
+            my = psy - 6 + math.sin(aim) * dist
+        else
+            -- Stick centered: use last aim angle
+            local dist = btActive and 120 or 80
+            mx = psx + math.cos(player._lastAimAngle) * dist
+            my = psy - 6 + math.sin(player._lastAimAngle) * dist
+        end
+    else
+        mx, my = love.mouse.getPosition()
+    end
 
     if btActive then
         -- Large crosshair during bullet-time
