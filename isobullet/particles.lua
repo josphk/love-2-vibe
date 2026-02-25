@@ -3,7 +3,8 @@
 -- Regular particles stored in screen-pixel space (converted from grid at spawn).
 -- Beam trails stored in grid-space (converted to screen at draw time).
 
-local Map = require("map")
+local Map       = require("map")
+local Lightning = require("lightning")
 
 local Particles = {}
 Particles.__index = Particles
@@ -164,31 +165,26 @@ end
 -- Draw (inside camera transform)
 --------------------------------------------------------------------------------
 function Particles:draw()
-    -- Beam trails (grid-space → screen at draw time)
+    -- Beam trails — lightning shader quads + bounce point indicators
     for _, beam in ipairs(self.beams) do
         local t = beam.age / beam.lifetime
         local alpha = 1.0 - t
 
-        for _, seg in ipairs(beam.segments) do
+        -- Lightning arcs (shader-based)
+        Lightning.drawBeam(beam.segments, beam.age, beam.lifetime)
+
+        -- Bounce point glowing circles (drawn without shader)
+        for si = 2, #beam.segments do
+            local seg = beam.segments[si]
             local sx1, sy1 = Map.gridToScreen(seg.x1, seg.y1)
-            local sx2, sy2 = Map.gridToScreen(seg.x2, seg.y2)
-
-            -- Wide glow
-            love.graphics.setLineWidth(math.max(1, 24 * (1 - t)))
-            love.graphics.setColor(1, 0.9, 0.5, 0.15 * alpha)
-            love.graphics.line(sx1, sy1, sx2, sy2)
-
-            -- Mid glow
-            love.graphics.setLineWidth(math.max(1, 8 * (1 - t)))
-            love.graphics.setColor(1, 0.85, 0.4, 0.4 * alpha)
-            love.graphics.line(sx1, sy1, sx2, sy2)
-
-            -- Core
-            love.graphics.setLineWidth(math.max(1, 3 * (1 - t * 0.5)))
-            love.graphics.setColor(1, 1, 0.95, 0.9 * alpha)
-            love.graphics.line(sx1, sy1, sx2, sy2)
+            local radius = math.max(2, 8 * (1 - t))
+            love.graphics.setColor(0.5, 0.8, 1.0, 0.3 * alpha)
+            love.graphics.circle("fill", sx1, sy1, radius)
+            love.graphics.setColor(0.7, 0.9, 1.0, 0.7 * alpha)
+            love.graphics.circle("fill", sx1, sy1, radius * 0.4)
+            love.graphics.setColor(1, 1, 1, 0.9 * alpha)
+            love.graphics.circle("fill", sx1, sy1, radius * 0.15)
         end
-        love.graphics.setLineWidth(1)
     end
 
     -- Particles (screen-space)
