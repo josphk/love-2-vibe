@@ -4,6 +4,7 @@
 
 local Map   = require("map")
 local Utils = require("utils")
+local Input = require("input")
 
 local Player = {}
 Player.__index = Player
@@ -40,6 +41,7 @@ function Player.new()
     self.aimGX = 12    -- aim target in grid coords
     self.aimGY = 10
     self.aimAngle = -math.pi / 2
+    self._lastAimAngle = -math.pi / 2   -- persistent aim for gamepad (screen-space)
 
     self.invulnTimer = 0
     self.dead = false
@@ -49,16 +51,8 @@ end
 function Player:update(dt, camera)
     if self.dead then return end
 
-    -- WASD movement (grid-space)
-    local dx, dy = 0, 0
-    if love.keyboard.isDown("a", "left")  then dx = dx - 1 end
-    if love.keyboard.isDown("d", "right") then dx = dx + 1 end
-    if love.keyboard.isDown("w", "up")    then dy = dy - 1 end
-    if love.keyboard.isDown("s", "down")  then dy = dy + 1 end
-    if dx ~= 0 and dy ~= 0 then
-        local inv = 1 / math.sqrt(2)
-        dx, dy = dx * inv, dy * inv
-    end
+    -- Movement (unified: keyboard grid-aligned, gamepad screen-aligned → grid converted)
+    local dx, dy = Input.getMovement()
     local nx = self.x + dx * SPEED * dt
     local ny = self.y + dy * SPEED * dt
     -- Wall collision (check each axis separately for wall sliding)
@@ -69,11 +63,38 @@ function Player:update(dt, camera)
     self.x = Utils.clamp(self.x, 1.6, Map.GW - 0.6)
     self.y = Utils.clamp(self.y, 1.6, Map.GH - 0.6)
 
-    -- Aim toward mouse (screen → world → grid)
-    local mx, my = love.mouse.getPosition()
-    local wx, wy = camera:screenToWorld(mx, my)
-    self.aimGX, self.aimGY = Map.screenToGrid(wx, wy)
-    self.aimAngle = Utils.angleTo(self.x, self.y, self.aimGX, self.aimGY)
+    -- Aiming
+    local gpAim, sDirX, sDirY = Input.getGamepadAim()
+    if gpAim then
+        -- Right stick active: convert screen-space direction → grid direction
+        self._lastAimAngle = gpAim
+        local gdx, gdy = Map.screenDirToGridDir(sDirX, sDirY)
+        local glen = math.sqrt(gdx * gdx + gdy * gdy)
+        if glen > 0.001 then
+            gdx, gdy = gdx / glen, gdy / glen
+        end
+        self.aimGX = self.x + gdx * 5
+        self.aimGY = self.y + gdy * 5
+        self.aimAngle = Utils.angleTo(self.x, self.y, self.aimGX, self.aimGY)
+    elseif Input.isGamepadAiming() then
+        -- Stick centered + gamepad mode: maintain last aim relative to player
+        local cosA = math.cos(self._lastAimAngle)
+        local sinA = math.sin(self._lastAimAngle)
+        local gdx, gdy = Map.screenDirToGridDir(cosA, sinA)
+        local glen = math.sqrt(gdx * gdx + gdy * gdy)
+        if glen > 0.001 then
+            gdx, gdy = gdx / glen, gdy / glen
+        end
+        self.aimGX = self.x + gdx * 5
+        self.aimGY = self.y + gdy * 5
+        self.aimAngle = Utils.angleTo(self.x, self.y, self.aimGX, self.aimGY)
+    else
+        -- Mouse aim (screen → world → grid)
+        local mx, my = love.mouse.getPosition()
+        local wx, wy = camera:screenToWorld(mx, my)
+        self.aimGX, self.aimGY = Map.screenToGrid(wx, wy)
+        self.aimAngle = Utils.angleTo(self.x, self.y, self.aimGX, self.aimGY)
+    end
 
     -- Invulnerability timer
     if self.invulnTimer > 0 then self.invulnTimer = self.invulnTimer - dt end
