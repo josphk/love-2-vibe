@@ -24,6 +24,7 @@ local HUD        = require("hud")
 local Utils      = require("utils")
 local Input      = require("input")
 local CRT        = require("crt")
+local Lightning  = require("lightning")
 
 --------------------------------------------------------------------------------
 -- State
@@ -60,8 +61,9 @@ function love.load()
     love.mouse.setVisible(false)
 
     CRT.init()
+    Lightning.init()
     SCREEN_W, SCREEN_H = CRT.getRenderSize()
-    love.graphics.setFont(love.graphics.newFont(math.floor(14 * math.min(SCREEN_W / 1024, SCREEN_H / 720))))
+    love.graphics.setFont(love.graphics.newFont(math.floor(24 * math.min(SCREEN_W / 1024, SCREEN_H / 720))))
 
     Map.setScreenSize(SCREEN_W, SCREEN_H)
     Map.build()
@@ -147,13 +149,16 @@ function love.resize(w, h)
     end
     Map.setScreenSize(SCREEN_W, SCREEN_H)
     camera:resize(SCREEN_W, SCREEN_H)
-    love.graphics.setFont(love.graphics.newFont(math.floor(14 * camera.baseScale)))
+    love.graphics.setFont(love.graphics.newFont(math.floor(24 * camera.baseScale)))
 end
 
 function love.keypressed(key)
     Input.lastDevice = "keyboard"
     if key == "escape" then love.event.quit() end
     if key == "r" and gameOver then resetGame() end
+    if key == "f5" then CRT.cycleColorNum(1) end
+    if key == "f6" then CRT.cyclePixelSize(1) end
+    if key == "f7" then CRT.toggleBlending() end
     if key == "f10" then CRT.toggle(); love.resize(love.graphics.getDimensions()) end
     if key == "f11" then love.window.setFullscreen(not love.window.getFullscreen(), "desktop") end
 end
