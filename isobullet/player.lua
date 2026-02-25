@@ -5,6 +5,7 @@
 local Map   = require("map")
 local Utils = require("utils")
 local Input = require("input")
+local CRT   = require("crt")
 
 local Player = {}
 Player.__index = Player
@@ -90,7 +91,7 @@ function Player:update(dt, camera)
         self.aimAngle = Utils.angleTo(self.x, self.y, self.aimGX, self.aimGY)
     else
         -- Mouse aim (screen → world → grid)
-        local mx, my = love.mouse.getPosition()
+        local mx, my = CRT.getMousePosition()
         local wx, wy = camera:screenToWorld(mx, my)
         self.aimGX, self.aimGY = Map.screenToGrid(wx, wy)
         self.aimAngle = Utils.angleTo(self.x, self.y, self.aimGX, self.aimGY)
@@ -233,12 +234,21 @@ function Player:drawAimLine()
         local sx1, sy1 = Map.gridToScreen(seg.x1, seg.y1)
         local sx2, sy2 = Map.gridToScreen(seg.x2, seg.y2)
         local clr = BOUNCE_COLORS[si] or BOUNCE_COLORS[#BOUNCE_COLORS]
-        local baseAlpha = math.max(0.1, 0.5 - (si - 1) * 0.12)
+        local baseAlpha = math.max(0.15, 0.65 - (si - 1) * 0.12)
 
-        -- Dashed line
+        -- Continuous glow line (bloom picks this up for neon effect)
         local totalLen = Utils.distance(sx1, sy1, sx2, sy2)
         if totalLen < 1 then goto nextSeg end
         local dirX, dirY = (sx2 - sx1) / totalLen, (sy2 - sy1) / totalLen
+
+        love.graphics.setLineWidth(6)
+        love.graphics.setColor(clr[1], clr[2], clr[3], 0.12 * baseAlpha)
+        love.graphics.line(sx1, sy1, sx2, sy2)
+        love.graphics.setLineWidth(3)
+        love.graphics.setColor(clr[1], clr[2], clr[3], 0.25 * baseAlpha)
+        love.graphics.line(sx1, sy1, sx2, sy2)
+
+        -- Dashed line
         local dashLen, gapLen = 10, 6
 
         love.graphics.setLineWidth(1.5)
@@ -270,10 +280,12 @@ function Player:drawAimLine()
 
         -- Bounce point indicator (small circle at segment start for bounced segments)
         if si > 1 then
-            love.graphics.setColor(clr[1], clr[2], clr[3], 0.6)
+            love.graphics.setColor(clr[1], clr[2], clr[3], 0.25)
+            love.graphics.circle("fill", sx1, sy1, 7)
+            love.graphics.setColor(clr[1], clr[2], clr[3], 0.8)
             love.graphics.circle("fill", sx1, sy1, 3)
-            love.graphics.setColor(1, 1, 1, 0.4)
-            love.graphics.circle("line", sx1, sy1, 5)
+            love.graphics.setColor(1, 1, 1, 0.6)
+            love.graphics.circle("fill", sx1, sy1, 1.5)
         end
 
         ::nextSeg::

@@ -23,6 +23,7 @@ local Background = require("background")
 local HUD        = require("hud")
 local Utils      = require("utils")
 local Input      = require("input")
+local CRT        = require("crt")
 
 --------------------------------------------------------------------------------
 -- State
@@ -50,12 +51,13 @@ end
 --------------------------------------------------------------------------------
 
 function love.load()
-    love.graphics.setDefaultFilter("linear", "linear")
-    SCREEN_W = love.graphics.getWidth()
-    SCREEN_H = love.graphics.getHeight()
+    love.graphics.setDefaultFilter("nearest", "nearest")
     math.randomseed(os.time())
-    love.graphics.setFont(love.graphics.newFont(14))
     love.mouse.setVisible(false)
+
+    CRT.init()
+    SCREEN_W, SCREEN_H = CRT.getRenderSize()
+    love.graphics.setFont(love.graphics.newFont(math.floor(14 * math.min(SCREEN_W / 1024, SCREEN_H / 720))))
 
     Map.setScreenSize(SCREEN_W, SCREEN_H)
     Map.build()
@@ -122,9 +124,13 @@ local function handleCancel()
 end
 
 function love.resize(w, h)
-    SCREEN_W, SCREEN_H = w, h
-    Map.setScreenSize(w, h)
-    camera:resize(w, h)
+    if CRT.enabled then
+        SCREEN_W, SCREEN_H = CRT.INTERNAL_W, CRT.INTERNAL_H
+    else
+        SCREEN_W, SCREEN_H = w, h
+    end
+    Map.setScreenSize(SCREEN_W, SCREEN_H)
+    camera:resize(SCREEN_W, SCREEN_H)
     love.graphics.setFont(love.graphics.newFont(math.floor(14 * camera.baseScale)))
 end
 
@@ -132,6 +138,7 @@ function love.keypressed(key)
     Input.lastDevice = "keyboard"
     if key == "escape" then love.event.quit() end
     if key == "r" and gameOver then resetGame() end
+    if key == "f10" then CRT.toggle(); love.resize(love.graphics.getDimensions()) end
     if key == "f11" then love.window.setFullscreen(not love.window.getFullscreen(), "desktop") end
 end
 
@@ -255,7 +262,7 @@ end
 -- Draw
 --------------------------------------------------------------------------------
 function love.draw()
-    -- Dark void background
+    CRT.beginDraw()
     love.graphics.clear(0.04, 0.04, 0.07, 1)
 
     ---- World-space (inside camera transform) ----
@@ -333,4 +340,6 @@ function love.draw()
     end
 
     Input.endFrame()
+
+    CRT.endDraw(love.graphics.getWidth(), love.graphics.getHeight())
 end
