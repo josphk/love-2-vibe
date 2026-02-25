@@ -12,18 +12,17 @@ CRT.INTERNAL_H = 360
 CRT.enabled = true
 
 local canvas, crtShader
-local bloomA, bloomB, thresholdShader, blurShader
+local bloomA, bloomB, thresholdShader, bloomShader
 local BLOOM_W, BLOOM_H
 local bayerTex
 
 local BLOOM_THRESHOLD = 0.28
 local BLOOM_INTENSITY = 0.8
-local BLOOM_PASSES = 3
 
 -- Configurable CRT parameters
 local crtColorNum = 8.0
 local crtPixelSize = 1.0
-local crtBlending = true
+local crtMaskIntensity = 0.3
 local crtCurve = 0.12
 
 local colorNumOptions = {2, 4, 8, 16}
@@ -40,7 +39,7 @@ extern vec2 resolution;
 extern float time;
 extern float colorNum;
 extern float pixelSize;
-extern float blending;
+extern float maskIntensity;
 extern float curve;
 extern Image bayerTex;
 
@@ -59,22 +58,22 @@ vec4 effect(vec4 color, Image tex, vec2 uv, vec2 screen_coords) {
     curveUV += curveUV * offset * offset;
     uv = (curveUV + 1.0) * 0.5;
 
-    // Edge smoothstep for curved screen borders
-    float edgeX = smoothstep(0.0, 0.02, uv.x) * (1.0 - smoothstep(0.98, 1.0, uv.x));
-    float edgeY = smoothstep(0.0, 0.02, uv.y) * (1.0 - smoothstep(0.98, 1.0, uv.y));
-    float edge = edgeX * edgeY;
+    // Power vignette from signed UVs
+    vec2 edgeUV = max(1.0 - curveUV * curveUV, vec2(0.0));
+    float vignette = pow(edgeUV.x * edgeUV.y, 0.4);
 
     if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0)
         return vec4(0.0, 0.0, 0.0, 1.0);
 
-    // CRT RGB subpixel mask
+    // CRT RGB subpixel mask with staggered cell layout
     vec2 pixelCoord = uv * resolution;
-    vec2 cellCoord = floor(pixelCoord / pixelSize);
-    vec2 cellCenter = (cellCoord + 0.5) * pixelSize / resolution;
+    vec2 coord = pixelCoord / pixelSize;
+    vec2 cell_offset = vec2(0.0, fract(floor(coord.x) * 0.5));
+    vec2 cellCenter = (floor(coord) + 0.5) * pixelSize / resolution;
 
-    // Subpixel column within cell (0, 1, or 2)
-    float subX = mod(pixelCoord.x, pixelSize);
-    float subCol = floor(subX / (pixelSize / 3.0));
+    // Subpixel coordinates (3 sub-columns per cell)
+    vec2 subcoord = coord * vec2(3.0, 1.0);
+    float subCol = mod(floor(subcoord.x), 3.0);
 
     // RGB mask using step() for GLSL 1.20 compatibility
     vec3 mask = vec3(
@@ -83,12 +82,11 @@ vec4 effect(vec4 color, Image tex, vec2 uv, vec2 screen_coords) {
         step(1.5, subCol)
     );
 
-    // Border falloff within cell (width scales with cell size)
-    float bw = clamp(pixelSize * 0.3, 0.01, 1.0);
-    float subY = mod(pixelCoord.y, pixelSize);
-    float borderX = smoothstep(0.0, bw, subX) * smoothstep(pixelSize, pixelSize - bw, subX);
-    float borderY = smoothstep(0.0, bw, subY) * smoothstep(pixelSize, pixelSize - bw, subY);
-    float border = borderX * borderY;
+    // Quadratic border falloff within sub-cell (scales with cell size)
+    vec2 cell_uv = fract(subcoord + cell_offset) * 2.0 - 1.0;
+    float borderCoeff = min((pixelSize - 1.0) * 0.8, 0.8);
+    vec2 border2 = 1.0 - cell_uv * cell_uv * borderCoeff;
+    float border = max(0.0, border2.x) * max(0.0, border2.y);
 
     // Cell-based chromatic aberration
     float SPREAD = 0.0025;
@@ -113,21 +111,19 @@ vec4 effect(vec4 color, Image tex, vec2 uv, vec2 screen_coords) {
     col = floor(col * (colorNum - 1.0) + 0.5) / (colorNum - 1.0);
     col = clamp(col, 0.0, 1.0);
 
-    // Mask application
-    if (blending > 0.5) {
-        // Subtle intensity blend
-        col *= mix(vec3(1.0), mask * 3.0, 0.15) * border;
-    } else {
-        // Hard RGB multiply
-        col *= mask * 3.0 * border;
-    }
+    // Mask application (continuous blend)
+    vec3 mask_color = mask * 3.0;
+    col *= (1.0 + (mask_color - 1.0) * maskIntensity) * border;
+
+    // Subtle horizontal CRT pulse
+    col *= 1.0 + 0.03 * cos(pixelCoord.x / 60.0 + time * 20.0);
 
     // Scanlines (aligned to pixel grid, nearly static)
     float scanline = 1.0 - 0.25 * (0.5 + 0.5 * sin(pixelCoord.y * 3.14159 + time * 0.15));
     col *= scanline;
 
-    // Edge fade
-    col *= edge;
+    // Vignette fade
+    col *= vignette;
 
     return vec4(col, 1.0) * color;
 }
@@ -144,16 +140,21 @@ vec4 effect(vec4 color, Image tex, vec2 uv, vec2 sc) {
 }
 ]]
 
-local blurShaderCode = [[
-extern vec2 direction;
+local bloomShaderCode = [[
+extern vec2 bloomRes;
 
 vec4 effect(vec4 color, Image tex, vec2 uv, vec2 sc) {
-    vec4 r = Texel(tex, uv) * 0.227027;
-    r += (Texel(tex, uv + direction) + Texel(tex, uv - direction)) * 0.1945946;
-    r += (Texel(tex, uv + direction * 2.0) + Texel(tex, uv - direction * 2.0)) * 0.1216216;
-    r += (Texel(tex, uv + direction * 3.0) + Texel(tex, uv - direction * 3.0)) * 0.054054;
-    r += (Texel(tex, uv + direction * 4.0) + Texel(tex, uv - direction * 4.0)) * 0.016216;
-    return r;
+    vec2 texel = 1.0 / bloomRes;
+    vec4 bloom = vec4(0.0);
+    vec2 point = vec2(16.0, 0.0) * inversesqrt(32.0);
+
+    for (float i = 0.0; i < 32.0; i += 1.0) {
+        point *= -mat2(0.7374, 0.6755, -0.6755, 0.7374);
+        bloom += Texel(tex, uv + point * sqrt(i) * texel) * (1.0 - i / 32.0);
+    }
+    bloom *= 3.0 / 32.0;
+    bloom += Texel(tex, uv) * 0.5;
+    return bloom;
 }
 ]]
 
@@ -199,14 +200,15 @@ function CRT.init()
     crtShader:send("bayerTex", bayerTex)
     crtShader:send("colorNum", crtColorNum)
     crtShader:send("pixelSize", crtPixelSize)
-    crtShader:send("blending", crtBlending and 1.0 or 0.0)
+    crtShader:send("maskIntensity", crtMaskIntensity)
     crtShader:send("curve", crtCurve)
     crtShader:send("time", 0.0)
 
     thresholdShader = love.graphics.newShader(thresholdShaderCode)
     thresholdShader:send("threshold", BLOOM_THRESHOLD)
 
-    blurShader = love.graphics.newShader(blurShaderCode)
+    bloomShader = love.graphics.newShader(bloomShaderCode)
+    bloomShader:send("bloomRes", {BLOOM_W, BLOOM_H})
 end
 
 function CRT.beginDraw()
@@ -226,29 +228,19 @@ function CRT.endDraw(screenW, screenH)
     love.graphics.draw(canvas, 0, 0, 0, BLOOM_W / CRT.INTERNAL_W, BLOOM_H / CRT.INTERNAL_H)
     love.graphics.setShader()
 
-    -- 2. Multi-pass Gaussian blur (ping-pong between bloomA and bloomB)
-    love.graphics.setShader(blurShader)
-    for _ = 1, BLOOM_PASSES do
-        -- Horizontal
-        love.graphics.setCanvas(bloomB)
-        love.graphics.clear(0, 0, 0, 1)
-        blurShader:send("direction", {1.0 / BLOOM_W, 0.0})
-        love.graphics.setColor(1, 1, 1, 1)
-        love.graphics.draw(bloomA)
-
-        -- Vertical
-        love.graphics.setCanvas(bloomA)
-        love.graphics.clear(0, 0, 0, 1)
-        blurShader:send("direction", {0.0, 1.0 / BLOOM_H})
-        love.graphics.draw(bloomB)
-    end
+    -- 2. Single-pass golden-angle spiral bloom (bloomA → bloomB)
+    love.graphics.setCanvas(bloomB)
+    love.graphics.clear(0, 0, 0, 1)
+    love.graphics.setShader(bloomShader)
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.draw(bloomA)
     love.graphics.setShader()
 
     -- 3. Composite bloom onto main canvas (additive)
     love.graphics.setCanvas(canvas)
     love.graphics.setBlendMode("add")
     love.graphics.setColor(1, 1, 1, BLOOM_INTENSITY)
-    love.graphics.draw(bloomA, 0, 0, 0, CRT.INTERNAL_W / BLOOM_W, CRT.INTERNAL_H / BLOOM_H)
+    love.graphics.draw(bloomB, 0, 0, 0, CRT.INTERNAL_W / BLOOM_W, CRT.INTERNAL_H / BLOOM_H)
     love.graphics.setBlendMode("alpha")
     love.graphics.setCanvas()
 
@@ -311,8 +303,12 @@ function CRT.cyclePixelSize(direction)
 end
 
 function CRT.toggleBlending()
-    crtBlending = not crtBlending
-    crtShader:send("blending", crtBlending and 1.0 or 0.0)
+    if crtMaskIntensity < 1.0 then
+        crtMaskIntensity = 1.0
+    else
+        crtMaskIntensity = 0.3
+    end
+    crtShader:send("maskIntensity", crtMaskIntensity)
 end
 
 return CRT
