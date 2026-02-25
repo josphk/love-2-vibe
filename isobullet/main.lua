@@ -121,10 +121,18 @@ local function handleCancel()
     end
 end
 
+function love.resize(w, h)
+    SCREEN_W, SCREEN_H = w, h
+    Map.setScreenSize(w, h)
+    camera:resize(w, h)
+    love.graphics.setFont(love.graphics.newFont(math.floor(14 * camera.baseScale)))
+end
+
 function love.keypressed(key)
     Input.lastDevice = "keyboard"
     if key == "escape" then love.event.quit() end
     if key == "r" and gameOver then resetGame() end
+    if key == "f11" then love.window.setFullscreen(not love.window.getFullscreen(), "desktop") end
 end
 
 function love.mousepressed(x, y, button)
@@ -304,6 +312,7 @@ function love.draw()
 
     -- Game over
     if gameOver then
+        local uiScale = math.min(SCREEN_W / 1024, SCREEN_H / 720)
         love.graphics.setColor(0, 0, 0, 0.65)
         love.graphics.rectangle("fill", 0, 0, SCREEN_W, SCREEN_H)
 
@@ -311,16 +320,16 @@ function love.draw()
 
         love.graphics.setColor(1, 0.2, 0.2, 1)
         local t1 = "GAME OVER"
-        love.graphics.print(t1, (SCREEN_W - font:getWidth(t1)) / 2, SCREEN_H / 2 - 40)
+        love.graphics.print(t1, (SCREEN_W - font:getWidth(t1)) / 2, SCREEN_H / 2 - 40 * uiScale)
 
         love.graphics.setColor(1, 1, 1, 0.9)
         local t2 = string.format("Score: %d   Waves: %d   Graze: %d",
             player.score, spawner.wave, player.graze)
-        love.graphics.print(t2, (SCREEN_W - font:getWidth(t2)) / 2, SCREEN_H / 2 - 10)
+        love.graphics.print(t2, (SCREEN_W - font:getWidth(t2)) / 2, SCREEN_H / 2 - 10 * uiScale)
 
         love.graphics.setColor(0.7, 0.7, 0.7, 0.5 + 0.4 * math.sin(love.timer.getTime() * 3))
         local t3 = Input.isGamepadAiming() and "Press X to restart" or "Press R to restart"
-        love.graphics.print(t3, (SCREEN_W - font:getWidth(t3)) / 2, SCREEN_H / 2 + 25)
+        love.graphics.print(t3, (SCREEN_W - font:getWidth(t3)) / 2, SCREEN_H / 2 + 25 * uiScale)
     end
 
     Input.endFrame()
