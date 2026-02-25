@@ -70,6 +70,8 @@ function Input.getMovement()
     end
 
     -- Keyboard fallback (grid-aligned)
+    local DebugUI = require("debug_ui")
+    if DebugUI.active then return 0, 0 end
     local dx, dy = 0, 0
     if love.keyboard.isDown("a", "left")  then dx = dx - 1 end
     if love.keyboard.isDown("d", "right") then dx = dx + 1 end

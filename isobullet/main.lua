@@ -25,6 +25,7 @@ local Utils      = require("utils")
 local Input      = require("input")
 local CRT        = require("crt")
 local Lightning  = require("lightning")
+local DebugUI    = require("debug_ui")
 
 --------------------------------------------------------------------------------
 -- State
@@ -154,6 +155,7 @@ end
 
 function love.keypressed(key)
     Input.lastDevice = "keyboard"
+    if DebugUI.keypressed(key) then return end
     if key == "escape" then love.event.quit() end
     if key == "r" and gameOver then resetGame() end
     if key == "f5" then CRT.cycleColorNum(1) end
@@ -370,4 +372,6 @@ function love.draw()
     Input.endFrame()
 
     CRT.endDraw(love.graphics.getWidth(), love.graphics.getHeight())
+
+    DebugUI.draw(love.graphics.getWidth(), love.graphics.getHeight())
 end

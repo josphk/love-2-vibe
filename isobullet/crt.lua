@@ -16,8 +16,8 @@ local bloomA, bloomB, thresholdShader, bloomShader
 local BLOOM_W, BLOOM_H
 local bayerTex
 
-local BLOOM_THRESHOLD = 0.28
-local BLOOM_INTENSITY = 0.8
+local BLOOM_THRESHOLD = 0.20
+local BLOOM_INTENSITY = 0.9
 
 -- Configurable CRT parameters
 local crtColorNum = 8.0
@@ -310,5 +310,76 @@ function CRT.toggleBlending()
     end
     crtShader:send("maskIntensity", crtMaskIntensity)
 end
+
+--------------------------------------------------------------------------------
+-- Debug parameter descriptors
+--------------------------------------------------------------------------------
+CRT.debugParams = {
+    {
+        name = "CRT Enabled",
+        type = "bool",
+        get = function() return CRT.enabled end,
+        set = function(v) CRT.enabled = v end,
+    },
+    {
+        name = "Color Levels",
+        type = "discrete",
+        options = colorNumOptions,
+        get = function() return colorNumIndex end,
+        set = function(i)
+            colorNumIndex = i
+            crtColorNum = colorNumOptions[i]
+            if crtShader then crtShader:send("colorNum", crtColorNum) end
+        end,
+    },
+    {
+        name = "Pixel Size",
+        type = "discrete",
+        options = pixelSizeOptions,
+        get = function() return pixelSizeIndex end,
+        set = function(i)
+            pixelSizeIndex = i
+            crtPixelSize = pixelSizeOptions[i]
+            if crtShader then crtShader:send("pixelSize", crtPixelSize) end
+        end,
+    },
+    {
+        name = "Mask Intensity",
+        type = "continuous",
+        min = 0.0, max = 1.0, step = 0.05,
+        get = function() return crtMaskIntensity end,
+        set = function(v)
+            crtMaskIntensity = v
+            if crtShader then crtShader:send("maskIntensity", crtMaskIntensity) end
+        end,
+    },
+    {
+        name = "Curvature",
+        type = "continuous",
+        min = 0.0, max = 0.5, step = 0.01,
+        get = function() return crtCurve end,
+        set = function(v)
+            crtCurve = v
+            if crtShader then crtShader:send("curve", crtCurve) end
+        end,
+    },
+    {
+        name = "Bloom Threshold",
+        type = "continuous",
+        min = 0.0, max = 1.0, step = 0.02,
+        get = function() return BLOOM_THRESHOLD end,
+        set = function(v)
+            BLOOM_THRESHOLD = v
+            if thresholdShader then thresholdShader:send("threshold", BLOOM_THRESHOLD) end
+        end,
+    },
+    {
+        name = "Bloom Intensity",
+        type = "continuous",
+        min = 0.0, max = 2.0, step = 0.05,
+        get = function() return BLOOM_INTENSITY end,
+        set = function(v) BLOOM_INTENSITY = v end,
+    },
+}
 
 return CRT
