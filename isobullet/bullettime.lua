@@ -22,6 +22,10 @@ function BulletTime.new()
     self.lerpSpeed   = 10
     self.cooldown    = 0       -- lockout after meter empties
     self.hitstop     = 0       -- brief total freeze on beam hit
+
+    -- Screen flash (P1)
+    self.screenFlash = 0
+    self.flashR, self.flashG, self.flashB = 1, 1, 1
     return self
 end
 
@@ -54,6 +58,9 @@ function BulletTime:update(realDt)
     -- Smooth time-scale transition
     self.timeScale = Utils.lerp(self.timeScale, self.targetScale,
                                 math.min(self.lerpSpeed * realDt, 1))
+
+    -- Screen flash decay (P1)
+    if self.screenFlash > 0 then self.screenFlash = self.screenFlash - realDt end
 end
 
 function BulletTime:activate()
@@ -73,6 +80,12 @@ function BulletTime:triggerHitstop(duration)
     self.hitstop = math.max(self.hitstop, duration)
 end
 
+--- Trigger a screen flash (P1).
+function BulletTime:flash(r, g, b, dur)
+    self.flashR, self.flashG, self.flashB = r, g, b
+    self.screenFlash = dur
+end
+
 --- Add meter (from kills, grazes, etc.).
 function BulletTime:addMeter(amount)
     self.meter = math.min(self.maxMeter, self.meter + amount)
@@ -83,8 +96,14 @@ function BulletTime:worldDt(realDt)
     return realDt * self.timeScale
 end
 
---- Screen-space blue tint + vignette overlay.
+--- Screen-space blue tint + vignette overlay + screen flash.
 function BulletTime:drawOverlay(screenW, screenH)
+    -- Screen flash (P1) — drawn regardless of BT state
+    if self.screenFlash > 0 then
+        love.graphics.setColor(self.flashR, self.flashG, self.flashB, self.screenFlash * 8)
+        love.graphics.rectangle("fill", 0, 0, screenW, screenH)
+    end
+
     if self.timeScale >= 0.95 then return end
 
     local intensity = 1.0 - self.timeScale   -- 0..1, stronger when slower

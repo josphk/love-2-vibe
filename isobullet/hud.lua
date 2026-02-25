@@ -5,12 +5,17 @@
 local Map   = require("map")
 local Input = require("input")
 local CRT   = require("crt")
+local Utils = require("utils")
 
 local HUD = {}
 
 -- Damage numbers
 HUD.damageNumbers = {}
 local DMG_DURATION = 0.9
+
+-- Score animation (P2)
+HUD.displayScore = 0
+HUD.scoreFlash = 0
 
 function HUD.addDamageNumber(gx, gy, value)
     local sx, sy = Map.gridToScreen(gx, gy)
@@ -19,13 +24,24 @@ function HUD.addDamageNumber(gx, gy, value)
     })
 end
 
-function HUD.updateDamageNumbers(dt)
+function HUD.updateDamageNumbers(dt, player)
     for i = #HUD.damageNumbers, 1, -1 do
         HUD.damageNumbers[i].timer = HUD.damageNumbers[i].timer - dt
         if HUD.damageNumbers[i].timer <= 0 then
             table.remove(HUD.damageNumbers, i)
         end
     end
+
+    -- Score animation (P2)
+    if player then
+        local prev = HUD.displayScore
+        HUD.displayScore = HUD.displayScore + (player.score - HUD.displayScore) * math.min(dt * 8, 1)
+        if math.abs(player.score - HUD.displayScore) < 1 then HUD.displayScore = player.score end
+        if HUD.displayScore ~= prev and prev < HUD.displayScore then
+            HUD.scoreFlash = 0.3
+        end
+    end
+    if HUD.scoreFlash > 0 then HUD.scoreFlash = HUD.scoreFlash - dt end
 end
 
 function HUD.drawDamageNumbers()
@@ -73,9 +89,10 @@ function HUD.draw(player, spawner, bt, screenW, screenH)
     for _ = 1, player.lives do livesStr = livesStr .. "♥ " end
     love.graphics.print(livesStr, lm, tm)
 
-    ---- Score (top-right) ----
-    love.graphics.setColor(1, 1, 1, 0.9)
-    local scoreStr = string.format("%08d", player.score)
+    ---- Score with rolling animation (P2) ----
+    local scoreBright = HUD.scoreFlash > 0 and math.min(1, HUD.scoreFlash * 3) or 0
+    love.graphics.setColor(1, 1 - scoreBright * 0.3, 1 - scoreBright * 0.5, 0.9)
+    local scoreStr = string.format("%08d", math.floor(HUD.displayScore))
     love.graphics.print(scoreStr, screenW - font:getWidth(scoreStr) - lm, tm)
 
     ---- Wave (top-center) ----
@@ -116,6 +133,46 @@ function HUD.draw(player, spawner, bt, screenW, screenH)
     love.graphics.setColor(0.7, 0.8, 1.0, 0.6)
     local label = bt.active and "▶ PRISM BEAM" or "CHRONO"
     love.graphics.print(label, mx + (meterW - font:getWidth(label)) / 2, my - math.floor(16 * uiScale))
+
+    -- BT meter pulse when full (P1)
+    if frac >= 0.99 and not bt.active then
+        local pulse = 0.15 + 0.12 * math.sin(love.timer.getTime() * 5)
+        love.graphics.setColor(0.3, 0.6, 1.0, pulse)
+        love.graphics.rectangle("fill", mx - 2, my - 2, meterW + 4, meterH + 4, 4, 4)
+        love.graphics.setColor(0.5, 0.8, 1.0, 0.5 + 0.3 * math.sin(love.timer.getTime() * 5))
+        local readyStr = "READY"
+        love.graphics.print(readyStr, mx + (meterW - font:getWidth(readyStr)) / 2, my + meterH + math.floor(4 * uiScale))
+    end
+
+    -- Wave splash text (P1)
+    if spawner.waveStartFlash > 0 then
+        local t = 1 - spawner.waveStartFlash / 1.5
+        local scale = 2.5 * Utils.easeOutBack(math.min(t * 3, 1))
+        if scale < 0.1 then goto skipWaveStart end
+        local alpha = t < 0.6 and 1 or math.max(0, 1 - (t - 0.6) / 0.4)
+        local waveText = string.format("WAVE %d", spawner.wave)
+        love.graphics.setColor(1, 1, 0.5, alpha)
+        love.graphics.push()
+        love.graphics.translate(screenW / 2, screenH * 0.35)
+        love.graphics.scale(scale, scale)
+        love.graphics.print(waveText, -font:getWidth(waveText) / 2, -font:getHeight() / 2)
+        love.graphics.pop()
+        ::skipWaveStart::
+    end
+    if spawner.waveClearFlash > 0 then
+        local t = 1 - spawner.waveClearFlash / 1.2
+        local scale = 2.5 * Utils.easeOutBack(math.min(t * 3, 1))
+        if scale < 0.1 then goto skipWaveClear end
+        local alpha = t < 0.5 and 1 or math.max(0, 1 - (t - 0.5) / 0.5)
+        local clearText = string.format("WAVE %d CLEAR!", spawner.wave)
+        love.graphics.setColor(0.3, 1, 0.5, alpha)
+        love.graphics.push()
+        love.graphics.translate(screenW / 2, screenH * 0.35)
+        love.graphics.scale(scale, scale)
+        love.graphics.print(clearText, -font:getWidth(clearText) / 2, -font:getHeight() / 2)
+        love.graphics.pop()
+        ::skipWaveClear::
+    end
 
     ---- Controls hint (fades out) ----
     if spawner.gameTime < 14 then

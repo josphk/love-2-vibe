@@ -72,6 +72,10 @@ function Spawner.new()
     self.betweenTimer = 2.5
     self.allCleared = false
     self.gameTime = 0
+
+    -- Wave splash timers (P1)
+    self.waveStartFlash = 0
+    self.waveClearFlash = 0
     return self
 end
 
@@ -89,6 +93,8 @@ function Spawner:nextWave()
     self.wave = self.wave + 1
     self.betweenWaves = false
     self.allCleared = false
+    self.waveStartFlash = 1.5  -- wave splash timer (P1)
+    self.waveClearFlash = 0    -- clear stale splash
 
     local waveData
     if self.wave <= #WAVES then
@@ -148,7 +154,13 @@ function Spawner:update(dt, bulletPool, playerX, playerY)
         self.allCleared = true
         self.betweenWaves = true
         self.betweenTimer = 2.5
+        self.waveClearFlash = 1.2  -- wave clear splash (P1)
+        self.waveStartFlash = 0   -- clear stale splash
     end
+
+    -- Decay splash timers (P1)
+    if self.waveStartFlash > 0 then self.waveStartFlash = self.waveStartFlash - dt end
+    if self.waveClearFlash > 0 then self.waveClearFlash = self.waveClearFlash - dt end
 end
 
 function Spawner:draw()

@@ -187,6 +187,29 @@ function Enemy.new(typeName, x, y)
     self.dead = false
     self.scored = false
     self.hitFlash = 0
+    self.hitScale = 1.0
+
+    -- Spawn animation
+    self.spawnTimer = 0
+    self.spawnDuration = 0.35
+
+    -- Muzzle flash
+    self.muzzleFlash = 0
+
+    -- Death animation (P2)
+    self.dying = false
+    self.deathTimer = 0
+    self.deathDuration = 0.15
+
+    -- HP drain display (P2)
+    self.displayHp = def.hp
+
+    -- Dasher afterimage trail (P2)
+    self.trail = {}
+    self.trailTimer = 0
+
+    -- Heavy telegraph (P2)
+    self.telegraphTimer = 0
 
     -- Movement state
     self.targetX, self.targetY = nil, nil
@@ -200,8 +223,50 @@ end
 
 function Enemy:update(dt, bulletPool, playerX, playerY)
     if self.dead then return end
+
+    -- Death animation (P2)
+    if self.dying then
+        self.deathTimer = self.deathTimer + dt
+        if self.deathTimer >= self.deathDuration then
+            self.dead = true
+        end
+        return
+    end
+
     self.age = self.age + dt
     if self.hitFlash > 0 then self.hitFlash = self.hitFlash - dt end
+
+    -- Hit squash decay (P1)
+    self.hitScale = Utils.lerp(self.hitScale, 1, dt * 18)
+
+    -- Spawn animation (P1)
+    if self.spawnTimer < self.spawnDuration then
+        self.spawnTimer = math.min(self.spawnTimer + dt, self.spawnDuration)
+        return  -- don't move or fire during spawn
+    end
+
+    -- Muzzle flash decay (P1)
+    if self.muzzleFlash > 0 then self.muzzleFlash = self.muzzleFlash - dt end
+
+    -- HP drain display (P2)
+    self.displayHp = self.displayHp + (self.hp - self.displayHp) * math.min(dt * 8, 1)
+
+    -- Heavy telegraph timer (P2)
+    self.telegraphTimer = self.fireTimer
+
+    -- Dasher trail (P2)
+    if self.typeName == "dasher" then
+        self.trailTimer = self.trailTimer + dt
+        if self.trailTimer >= 0.04 then
+            self.trailTimer = 0
+            table.insert(self.trail, 1, { x = self.x, y = self.y, alpha = 1.0 })
+            if #self.trail > 6 then table.remove(self.trail) end
+        end
+        for i = #self.trail, 1, -1 do
+            self.trail[i].alpha = self.trail[i].alpha - dt * 6
+            if self.trail[i].alpha <= 0 then table.remove(self.trail, i) end
+        end
+    end
 
     -- Movement
     self.moveFunc(self, dt)
@@ -214,22 +279,33 @@ function Enemy:update(dt, bulletPool, playerX, playerY)
     self.fireTimer = self.fireTimer - dt
     if self.fireTimer <= 0 then
         self.fireTimer = self.fireInterval
+        local fired = false
         -- LOS check for aimed enemies
         if self.needsLOS then
             if Map.lineOfSight(self.x, self.y, playerX, playerY) then
                 self.patternFunc(self, bulletPool, playerX, playerY)
+                fired = true
             end
         else
             self.patternFunc(self, bulletPool, playerX, playerY)
+            fired = true
         end
+        -- Muzzle flash on fire (P1)
+        if fired then self.muzzleFlash = 0.07 end
     end
 end
 
 function Enemy:takeDamage(dmg)
-    if self.dead then return false end
+    if self.dead or self.dying then return false end
     self.hp = self.hp - dmg
     self.hitFlash = 0.12
-    if self.hp <= 0 then self.dead = true; return true end
+    self.hitScale = 1.25  -- squash on hit (P1)
+    if self.hp <= 0 then
+        -- Start death animation instead of instant death (P2)
+        self.dying = true
+        self.deathTimer = 0
+        return true
+    end
     return false
 end
 
@@ -237,27 +313,73 @@ function Enemy:draw()
     if self.dead then return end
 
     local sx, sy = Map.gridToScreen(self.x, self.y)
-    local rad = self.drawRadius
-    local flash = self.hitFlash > 0
+
+    -- Spawn scale with easeOutBack overshoot (P1)
+    local spawnFrac = Utils.clamp(self.spawnTimer / self.spawnDuration, 0, 1)
+    local spawnScale = Utils.easeOutBack(spawnFrac)
+
+    -- Death animation: scale up + white-out (P2)
+    local deathFrac = 0
+    if self.dying then
+        deathFrac = Utils.clamp(self.deathTimer / self.deathDuration, 0, 1)
+        spawnScale = 1 + deathFrac * 0.4
+    end
+
+    local rad = self.drawRadius * spawnScale * self.hitScale
+    local flash = self.hitFlash > 0 or self.dying
     local r, g, b = self.cr, self.cg, self.cb
+    local alpha = self.dying and (1 - deathFrac) or 1
     if flash then r, g, b = 1, 1, 1 end
 
+    -- Dasher afterimage trail (P2)
+    if self.typeName == "dasher" and not self.dying then
+        for _, t in ipairs(self.trail) do
+            local tsx, tsy = Map.gridToScreen(t.x, t.y)
+            local trad = self.drawRadius * 0.8
+            love.graphics.setColor(self.cr, self.cg, self.cb, t.alpha * 0.3)
+            love.graphics.polygon("fill",
+                tsx, tsy - trad,
+                tsx + trad * 0.86, tsy + trad * 0.5,
+                tsx - trad * 0.86, tsy + trad * 0.5)
+        end
+    end
+
+    -- Heavy telegraph warning (P2)
+    if self.typeName == "heavy" and not self.dying
+       and self.spawnTimer >= self.spawnDuration
+       and self.telegraphTimer < 0.4 then
+        local pulse = 0.5 + 0.5 * math.sin(self.age * 15)
+        love.graphics.setColor(1, 0.2, 0.1, 0.15 * pulse)
+        love.graphics.circle("fill", sx, sy, rad * 3.5)
+        love.graphics.setColor(1, 0.2, 0.1, 0.25 * pulse)
+        love.graphics.circle("fill", sx, sy, rad * 2.5)
+    end
+
+    -- Muzzle flash (P1)
+    if self.muzzleFlash > 0 and not self.dying then
+        local mf = self.muzzleFlash / 0.07
+        love.graphics.setColor(self.cr, self.cg, self.cb, 0.3 * mf)
+        love.graphics.circle("fill", sx, sy, rad * 2)
+        love.graphics.setColor(1, 1, 1, 0.5 * mf)
+        love.graphics.circle("fill", sx, sy, rad * 0.8)
+    end
+
     -- Shadow
-    love.graphics.setColor(0, 0, 0, 0.3)
+    love.graphics.setColor(0, 0, 0, 0.3 * alpha)
     love.graphics.ellipse("fill", sx, sy + rad * 0.4, rad * 0.8, rad * 0.3)
 
     -- Shape
     if self.shape == "diamond" then
-        love.graphics.setColor(r, g, b, 0.9)
+        love.graphics.setColor(r, g, b, 0.9 * alpha)
         love.graphics.polygon("fill",
             sx, sy - rad, sx + rad, sy, sx, sy + rad, sx - rad, sy)
-        love.graphics.setColor(1, 1, 1, 0.3)
+        love.graphics.setColor(1, 1, 1, 0.3 * alpha)
         love.graphics.polygon("line",
             sx, sy - rad, sx + rad, sy, sx, sy + rad, sx - rad, sy)
     elseif self.shape == "circle" then
-        love.graphics.setColor(r, g, b, 0.85)
+        love.graphics.setColor(r, g, b, 0.85 * alpha)
         love.graphics.circle("fill", sx, sy, rad)
-        love.graphics.setColor(1, 1, 1, 0.3)
+        love.graphics.setColor(1, 1, 1, 0.3 * alpha)
         love.graphics.circle("line", sx, sy, rad)
     elseif self.shape == "hexagon" then
         local pts = {}
@@ -266,17 +388,17 @@ function Enemy:draw()
             table.insert(pts, sx + math.cos(a) * rad)
             table.insert(pts, sy + math.sin(a) * rad)
         end
-        love.graphics.setColor(r, g, b, 0.85)
+        love.graphics.setColor(r, g, b, 0.85 * alpha)
         love.graphics.polygon("fill", pts)
-        love.graphics.setColor(1, 1, 1, 0.3)
+        love.graphics.setColor(1, 1, 1, 0.3 * alpha)
         love.graphics.polygon("line", pts)
     elseif self.shape == "triangle" then
-        love.graphics.setColor(r, g, b, 0.9)
+        love.graphics.setColor(r, g, b, 0.9 * alpha)
         love.graphics.polygon("fill",
             sx, sy - rad,
             sx + rad * 0.86, sy + rad * 0.5,
             sx - rad * 0.86, sy + rad * 0.5)
-        love.graphics.setColor(1, 1, 1, 0.3)
+        love.graphics.setColor(1, 1, 1, 0.3 * alpha)
         love.graphics.polygon("line",
             sx, sy - rad,
             sx + rad * 0.86, sy + rad * 0.5,
@@ -284,16 +406,21 @@ function Enemy:draw()
     end
 
     -- Inner glow
-    love.graphics.setColor(1, 1, 1, 0.35)
+    love.graphics.setColor(1, 1, 1, 0.35 * alpha)
     love.graphics.circle("fill", sx, sy, rad * 0.2)
 
-    -- HP bar (when damaged)
-    if self.hp < self.maxHp then
-        local bw = rad * 2
+    -- HP bar with drain animation (P2)
+    if not self.dying and self.hp < self.maxHp then
+        local bw = self.drawRadius * 2
         local bx = sx - bw / 2
-        local by = sy - rad - 8
+        local by = sy - self.drawRadius - 8
         love.graphics.setColor(0.2, 0.2, 0.2, 0.7)
         love.graphics.rectangle("fill", bx, by, bw, 3)
+        -- Drain bar (delayed, red)
+        local drainFrac = Utils.clamp(self.displayHp / self.maxHp, 0, 1)
+        love.graphics.setColor(1, 0.3, 0.2, 0.6)
+        love.graphics.rectangle("fill", bx, by, bw * drainFrac, 3)
+        -- Current HP bar (green)
         love.graphics.setColor(0.2, 1, 0.2, 0.9)
         love.graphics.rectangle("fill", bx, by, bw * (self.hp / self.maxHp), 3)
     end

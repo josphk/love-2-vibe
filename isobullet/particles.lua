@@ -57,6 +57,43 @@ function Particles:wallSpark(gx, gy)
     self:spark(gx, gy, 0.8, 0.7, 0.2)
 end
 
+--- Dust particles at player feet (P2)
+function Particles:dust(gx, gy)
+    local sx, sy = Map.gridToScreen(gx, gy)
+    for _ = 1, 3 do
+        local a = math.random() * math.pi * 2
+        local spd = 10 + math.random() * 20
+        table.insert(self.list, {
+            x = sx + (math.random() - 0.5) * 6,
+            y = sy + 4 + math.random() * 4,
+            vx = math.cos(a) * spd, vy = math.sin(a) * spd - 8,
+            r = 0.6, g = 0.55, b = 0.45,
+            life = 0.15 + math.random() * 0.1,
+            maxLife = 0.25,
+            size = 1 + math.random() * 1.5,
+        })
+    end
+end
+
+--- Ring of particles for enemy death shockwave (P2)
+function Particles:ring(gx, gy, r, g, b, radius)
+    local sx, sy = Map.gridToScreen(gx, gy)
+    local screenRadius = radius or 16
+    for i = 0, 15 do
+        local a = (i / 16) * math.pi * 2
+        local spd = 60 + math.random() * 40
+        table.insert(self.list, {
+            x = sx + math.cos(a) * screenRadius * 0.5,
+            y = sy + math.sin(a) * screenRadius * 0.5,
+            vx = math.cos(a) * spd, vy = math.sin(a) * spd,
+            r = r or 1, g = g or 0.9, b = b or 0.5,
+            life = 0.15 + math.random() * 0.1,
+            maxLife = 0.25,
+            size = 1.5 + math.random() * 2,
+        })
+    end
+end
+
 function Particles:text(gx, gy, str, r, g, b)
     local sx, sy = Map.gridToScreen(gx, gy)
     table.insert(self.texts, {

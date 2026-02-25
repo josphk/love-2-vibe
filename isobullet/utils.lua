@@ -28,6 +28,21 @@ function Utils.lerp(a, b, t)
     return a + (b - a) * t
 end
 
+function Utils.easeOutBack(t)
+    local s = 1.70158
+    t = t - 1
+    return t * t * ((s + 1) * t + s) + 1
+end
+
+function Utils.easeOutCubic(t)
+    t = t - 1
+    return t * t * t + 1
+end
+
+function Utils.easeOutQuad(t)
+    return t * (2 - t)
+end
+
 --- Reflect vector (vx,vy) across normal (nx,ny).
 function Utils.reflect(vx, vy, nx, ny)
     local dot = vx * nx + vy * ny

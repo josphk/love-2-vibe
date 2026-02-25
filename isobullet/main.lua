@@ -38,11 +38,15 @@ local function resetGame()
     spawner   = Spawner.new()
     particles = Particles.new()
     bt        = BulletTime.new()
-    camera.shakeTimer  = 0
-    camera.shakeAmount = 0
-    camera.zoom        = 1.0
-    camera.targetZoom  = 1.0
+    camera.shakeTimer    = 0
+    camera.shakeAmount   = 0
+    camera.shakeImpulseX = 0
+    camera.shakeImpulseY = 0
+    camera.zoom          = 1.0
+    camera.targetZoom    = 1.0
     HUD.damageNumbers  = {}
+    HUD.displayScore   = 0
+    HUD.scoreFlash     = 0
     gameOver = false
 end
 
@@ -76,11 +80,18 @@ local function handleFire()
         local result = player:fireBeam(bullets, spawner.enemies, particles)
         if result then
             player.score = player.score + result.score
-            camera:shake(6, 0.2)
+            -- Directional shake along aim direction (P2)
+            local adx = player.aimGX - player.x
+            local ady = player.aimGY - player.y
+            local alen = math.sqrt(adx * adx + ady * ady)
+            if alen > 0.001 then adx, ady = adx / alen, ady / alen end
+            camera:shake(6, 0.2, adx, ady)
 
-            -- Hitstop for big kills
+            -- Scaled hitstop (P1) — multi-kills feel momentous, singles stay snappy
             if result.destroyed >= 5 or result.hit >= 1 then
-                bt:triggerHitstop(0.06)
+                local dur = 0.03 + result.hit * 0.015
+                           + math.min(result.destroyed, 20) * 0.003
+                bt:triggerHitstop(math.min(dur, 0.12))
             end
 
             -- Meter refill from kills
@@ -104,12 +115,17 @@ local function handleFire()
             end
         end
 
-        -- Exit bullet-time
+        -- Screen flash on fire (P1)
+        bt:flash(0.7, 0.85, 1.0, 0.06)
+
+        -- Exit bullet-time with zoom undershoot (P1)
         bt:deactivate()
+        camera.zoom = 0.96
         camera.targetZoom = 1.0
     else
         ---- ENTER BULLET-TIME ----
         if bt:activate() then
+            camera.zoom = 1.07       -- overshoot punch (P1)
             camera.targetZoom = 1.03
         end
     end
@@ -185,7 +201,7 @@ function love.update(realDt)
     -- Bullet-time system (runs on real time)
     bt:update(realDt)
     camera:update(realDt)
-    HUD.updateDamageNumbers(realDt)
+    HUD.updateDamageNumbers(realDt, player)
 
     -- If BT was forced off (meter empty), reset zoom
     if not bt.active then camera.targetZoom = 1.0 end
@@ -197,7 +213,7 @@ function love.update(realDt)
 
     -- Player (movement blend: slower in BT but responsive)
     local playerDt = bt.active and realDt * 0.35 or dt
-    player:update(playerDt, camera)
+    player:update(playerDt, camera, particles)
 
     -- Enemies
     spawner:update(dt, bullets, player.x, player.y)
@@ -222,6 +238,13 @@ function love.update(realDt)
                     player.graze = player.graze + 1
                     player.score = player.score + 20
                     bt:addMeter(1.5)
+                    -- Graze sparks (P1)
+                    particles:spark(b.x, b.y, 0.5, 0.7, 1.0)
+                    -- Milestone text every 10th graze
+                    if player.graze % 10 == 0 then
+                        particles:text(player.x, player.y - 1,
+                            "GRAZE x" .. player.graze, 0.5, 0.8, 1.0)
+                    end
                 end
             end
         end

@@ -46,10 +46,15 @@ function Player.new()
 
     self.invulnTimer = 0
     self.dead = false
+
+    -- Squash/stretch (P2)
+    self.squashX = 1
+    self.squashY = 1
+    self.dustTimer = 0
     return self
 end
 
-function Player:update(dt, camera)
+function Player:update(dt, camera, particles)
     if self.dead then return end
 
     -- Movement (unified: keyboard grid-aligned, gamepad screen-aligned → grid converted)
@@ -59,6 +64,20 @@ function Player:update(dt, camera)
     -- Wall collision (check each axis separately for wall sliding)
     if not Map.isWall(nx, self.y) then self.x = nx end
     if not Map.isWall(self.x, ny) then self.y = ny end
+
+    -- Squash/stretch based on movement speed (P2)
+    local speed = math.sqrt(dx * dx + dy * dy)
+    self.squashX = Utils.lerp(self.squashX, 1 + speed * 0.08, dt * 12)
+    self.squashY = 1 - (self.squashX - 1) * 0.5
+
+    -- Dust particles when moving (P2)
+    if particles and speed > 0.3 then
+        self.dustTimer = self.dustTimer - dt
+        if self.dustTimer <= 0 then
+            particles:dust(self.x, self.y)
+            self.dustTimer = 0.08
+        end
+    end
 
     -- Clamp within map
     self.x = Utils.clamp(self.x, 1.6, Map.GW - 0.6)
@@ -147,6 +166,7 @@ function Player:fireBeam(bulletPool, enemies, particles)
                     if killed then
                         score = score + e.score
                         particles:burst(e.x, e.y, 1, 0.9, 0.5, 16, 130)
+                        particles:ring(e.x, e.y, e.cr, e.cg, e.cb, e.drawRadius)
                     end
                     break   -- don't damage same enemy from multiple segments
                 end
@@ -197,15 +217,19 @@ function Player:draw()
 
     local sx, sy = Map.gridToScreen(self.x, self.y)
 
+    -- Squash/stretch factors (P2)
+    local sqx = self.squashX
+    local sqy = self.squashY
+
     -- Shadow
     love.graphics.setColor(0, 0, 0, 0.35)
-    love.graphics.ellipse("fill", sx, sy + 6, 10, 4)
+    love.graphics.ellipse("fill", sx, sy + 6, 10 * sqx, 4)
 
     -- Body (ellipse, raised slightly like tactical-shooter)
     love.graphics.setColor(0.3, 0.5, 0.75)
-    love.graphics.ellipse("fill", sx, sy - 6, 12, 9)
+    love.graphics.ellipse("fill", sx, sy - 6, 12 * sqx, 9 * sqy)
     love.graphics.setColor(0.5, 0.7, 0.95)
-    love.graphics.ellipse("line", sx, sy - 6, 12, 9)
+    love.graphics.ellipse("line", sx, sy - 6, 12 * sqx, 9 * sqy)
 
     -- Weapon direction indicator
     local cosA, sinA = math.cos(self.aimAngle), math.sin(self.aimAngle)

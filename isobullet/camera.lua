@@ -23,6 +23,9 @@ function Camera.new(screenW, screenH)
     self.offsetY = 0
     self.zoom = 1.0
     self.targetZoom = 1.0
+    -- Directional shake impulse (P2)
+    self.shakeImpulseX = 0
+    self.shakeImpulseY = 0
     return self
 end
 
@@ -37,17 +40,27 @@ function Camera:update(dt)
     if self.shakeTimer > 0 then
         self.shakeTimer = self.shakeTimer - dt
         self.offsetX = (math.random() - 0.5) * self.shakeAmount * 2 * self.baseScale
+                     + self.shakeImpulseX * self.baseScale
         self.offsetY = (math.random() - 0.5) * self.shakeAmount * 2 * self.baseScale
+                     + self.shakeImpulseY * self.baseScale
     else
         self.offsetX, self.offsetY = 0, 0
     end
+    -- Directional impulse decay (P2)
+    self.shakeImpulseX = self.shakeImpulseX * 0.85
+    self.shakeImpulseY = self.shakeImpulseY * 0.85
     -- Zoom interpolation
     self.zoom = Utils.lerp(self.zoom, self.targetZoom, math.min(dt * 6, 1))
 end
 
-function Camera:shake(amount, duration)
+function Camera:shake(amount, duration, dirX, dirY)
     self.shakeAmount = math.max(self.shakeAmount, amount)
     self.shakeTimer  = math.max(self.shakeTimer, duration)
+    -- Directional impulse (P2)
+    if dirX and dirY then
+        self.shakeImpulseX = dirX * amount * 0.6
+        self.shakeImpulseY = dirY * amount * 0.6
+    end
 end
 
 --- Push camera transform (zoom around screen center + shake).
