@@ -24,9 +24,10 @@ This is not a "watch 40 hours of tutorials" roadmap. This is a build-first, read
          9, 10, 11 (independent — pick any after Module 5)
          12 (cutting edge — builds on Modules 6-8)
          13 (capstone — do whenever you're ready to ship)
+         14 → 15 → 16 (TSL mastery — deep dive after Module 12)
 ```
 
-After Module 5, you have a complete game-capable foundation. Modules 6-8 form the "artistic core" and benefit from being done in sequence (shaders feed into post-processing, which feeds into procedural worlds), but you can jump to Module 9, 10, or 11 if you want game feel, UI, or multiplayer first. Module 12 assumes shader knowledge from 6-8. Module 13 is your shipping capstone — do it whenever you have something worth deploying.
+After Module 5, you have a complete game-capable foundation. Modules 6-8 form the "artistic core" and benefit from being done in sequence (shaders feed into post-processing, which feeds into procedural worlds), but you can jump to Module 9, 10, or 11 if you want game feel, UI, or multiplayer first. Module 12 assumes shader knowledge from 6-8. Module 13 is your shipping capstone — do it whenever you have something worth deploying. Modules 14-16 are the "TSL mastery" track — deep dives into node materials, advanced compute, and ecosystem integration that build on Module 12.
 
 **All code is TypeScript/TSX.** No plain JS. TypeScript catches entire categories of bugs that would otherwise waste your debugging time, and R3F's types are excellent.
 
@@ -529,6 +530,123 @@ After Module 5, you have a complete game-capable foundation. Modules 6-8 form th
 - Future paths: native apps (Electron/Tauri), mobile (React Native), advanced AI integration
 
 **Time:** 4–8 hours
+
+---
+
+## TSL Mastery Track
+
+Modules 14–16 are deep dives into TSL (Three Shading Language) that go far beyond the introductions in Modules 6 and 12. Complete Module 12 first — these modules assume you're comfortable with TSL basics, `MeshStandardNodeMaterial`, and simple compute shaders. The track is sequential: materials → compute → ecosystem integration.
+
+---
+
+## Module 14: TSL Materials & Textures
+
+> **Deep dive:** [Full study guide](module-14-tsl-materials-textures.md)
+
+**Goal:** Master TSL's node material system: every PBR slot, texture sampling, noise functions, procedural patterns, screen-space operations, and material debugging.
+
+**Do this:**
+
+1. Override every material slot on `MeshStandardNodeMaterial` and `MeshPhysicalNodeMaterial`
+2. Sample textures with `texture()` and manipulate UVs (tiling, rotation, triplanar mapping)
+3. Explore built-in noise: `mx_noise_float`, `mx_fractal_noise_float`, `mx_worley_noise_float`
+4. Build procedural patterns: brick, voronoi, gradient mapping, domain warping
+5. Use screen-space nodes: `screenUV`, depth buffer access, soft intersection effects
+6. Debug materials: visualize normals, UVs, individual channels, depth
+7. **Mini-project:** Procedural Material Gallery — 6 materials (marble, wood, water, fire, hologram, forcefield) built entirely in TSL with zero texture images
+
+**Read:**
+
+- Three.js TSL Docs: https://threejs.org/docs/pages/TSL.html
+- MaterialX Specification: https://materialx.org/Specification.html
+- The Book of Shaders — Noise: https://thebookofshaders.com/11/
+
+**Key concepts:**
+
+- Node material slot system: colorNode, emissiveNode, roughnessNode, normalNode, positionNode, and 10+ more
+- `MeshStandardNodeMaterial` vs `MeshPhysicalNodeMaterial` vs `MeshBasicNodeMaterial`
+- Texture nodes: `texture()`, UV manipulation, triplanar mapping
+- MaterialX noise: `mx_noise_float`, `mx_fractal_noise_float`, `mx_worley_noise_float`
+- Procedural patterns: domain warping, voronoi, gradient mapping
+- Screen-space operations: `screenUV`, depth buffer, soft particles
+- Material debugging: visualizing intermediate values through `outputNode`
+
+**Time:** 8–12 hours
+
+---
+
+## Module 15: TSL Compute — Advanced Patterns
+
+> **Deep dive:** [Full study guide](module-15-tsl-compute-advanced.md)
+
+**Goal:** Build production-grade GPU compute pipelines: shared memory, atomics, multi-dispatch, parallel reduction, sorting, and spatial data structures.
+
+**Do this:**
+
+1. Use `workgroupArray()` for shared workgroup memory with barrier synchronization
+2. Implement atomic counters and histograms with `atomicAdd`
+3. Build a ping-pong buffer system for double-buffered simulation
+4. Chain multiple compute dispatches into a multi-pass pipeline
+5. Implement parallel reduction (sum, min/max) across workgroups
+6. Build a spatial hash grid for efficient neighbor search
+7. **Mini-project:** GPU Fluid Simulation — SPH (Smoothed Particle Hydrodynamics) with 50k+ particles, multi-dispatch pipeline, spatial grid acceleration, and velocity-mapped coloring
+
+**Read:**
+
+- WebGPU Fundamentals — Compute: https://webgpufundamentals.org
+- WGSL Specification: https://www.w3.org/TR/WGSL/
+- Müller et al. — Particle-Based Fluid Simulation: https://matthias-research.github.io/pages/publications/sph-fluids.pdf
+
+**Key concepts:**
+
+- Shared workgroup memory: `workgroupArray()`, `workgroupBarrier()`, tile-based patterns
+- Atomic operations: `atomicAdd`, `atomicMax`, `atomicCompareExchange`, lock-free counting
+- Ping-pong (double) buffering: read from A, write to B, swap
+- Multi-dispatch pipelines: chaining compute passes with implicit synchronization
+- Parallel reduction: tree-based sum/min/max across GPU threads
+- GPU sorting: bitonic sort, radix sort basics
+- Spatial hashing: grid-based neighbor search for particle simulations
+- Indirect dispatch: GPU-driven workgroup counts
+
+**Time:** 10–14 hours
+
+---
+
+## Module 16: TSL Ecosystem & Real-World Patterns
+
+> **Deep dive:** [Full study guide](module-16-tsl-ecosystem-patterns.md)
+
+**Goal:** Integrate TSL into real R3F projects: Drei helpers, post-processing, instancing, GLSL migration, TypeScript types, and debugging/profiling.
+
+**Do this:**
+
+1. Extend Drei materials (`MeshTransmissionMaterial`, `MeshReflectorMaterial`) with TSL node overrides
+2. Build a custom post-processing effect using TSL-generated shaders
+3. Use TSL with `InstancedMesh` for per-instance procedural variation
+4. Compose reusable TSL utility libraries with `Fn()` composition
+5. Inspect generated WGSL output and understand the TSL compiler
+6. Convert 3 GLSL shaders to TSL using the migration cookbook
+7. Set up proper TypeScript types for TSL development
+8. **Mini-project:** Retrofit Project — convert 3 existing GLSL shaders (energy shield, terrain, holographic display) to TSL, add compute-driven VFX, and integrate with post-processing
+
+**Read:**
+
+- Three.js TSL Docs: https://threejs.org/docs/pages/TSL.html
+- drei documentation: https://drei.docs.pmnd.rs/
+- pmndrs postprocessing: https://github.com/pmndrs/postprocessing
+
+**Key concepts:**
+
+- TSL + Drei: extending built-in materials with node overrides
+- TSL + post-processing: custom Effect class with TSL-generated shaders
+- TSL + InstancedMesh: per-instance node overrides, compute-driven instancing
+- `Fn()` composition: nested functions, reusable node libraries, parameterized patterns
+- Generated WGSL inspection: understanding what the TSL compiler produces
+- GLSL → TSL migration: pattern-by-pattern translation cookbook (12+ recipes)
+- TypeScript integration: proper imports, type narrowing, autocompletion
+- Debugging: Spector.js, Chrome GPU inspector, node graph visualization
+
+**Time:** 6–10 hours
 
 ---
 

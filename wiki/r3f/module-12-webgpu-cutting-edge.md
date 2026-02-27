@@ -2074,7 +2074,19 @@ Hints:
 
 ## What's Next?
 
-You've reached the bleeding edge. You can set up a WebGPU renderer, author shaders in TSL, dispatch compute shaders, and build GPU-driven simulations that would be impossible on the CPU alone. This is the most technically advanced module in the roadmap.
+You've reached the bleeding edge. You can set up a WebGPU renderer, author shaders in TSL, dispatch compute shaders, and build GPU-driven simulations that would be impossible on the CPU alone. This is the most technically advanced module in the roadmap — but there's much more to explore.
+
+### TSL Mastery Track
+
+If you want to go deeper with TSL and GPU compute, three dedicated modules continue where this one left off:
+
+- **[Module 14: TSL Materials & Textures](module-14-tsl-materials-textures.md)** — Master every PBR material slot, built-in noise functions (MaterialX noise, Worley, fractal), procedural patterns, screen-space operations, and material debugging. Build 6 complete procedural materials with zero texture images.
+
+- **[Module 15: TSL Compute — Advanced Patterns](module-15-tsl-compute-advanced.md)** — Production GPU compute: shared workgroup memory, atomics, ping-pong buffers, multi-dispatch pipelines, parallel reduction, GPU sorting, and spatial data structures. Build a 50k+ particle SPH fluid simulation.
+
+- **[Module 16: TSL Ecosystem & Real-World Patterns](module-16-tsl-ecosystem-patterns.md)** — Integrate TSL with Drei, post-processing, instancing, and TypeScript. GLSL → TSL migration cookbook, generated WGSL inspection, and debugging/profiling. Retrofit 3 GLSL shaders to TSL.
+
+### Shipping
 
 **[Module 13: Build, Ship & What's Next](module-13-ship-whats-next.md)** brings it all together. You'll optimize your game for production, compress assets, configure Vite for deployment, and ship to the web. You'll also look at what's coming next: XR, AI integration, and where the React 3D ecosystem is heading. Time to put your game in front of players.
 
