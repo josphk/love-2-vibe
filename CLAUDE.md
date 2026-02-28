@@ -10,4 +10,6 @@ Never add "Co-Authored-By" lines to commit messages.
 
 ## Subagents
 
-Subagents can be used for research (searching, reading files, web fetches) and for generating content in their response, but the main thread should be the one that actually writes files to disk. This avoids subagents getting blocked on permissions silently and burning through usage limits.
+**For batch content generation** (wiki modules, documentation series, multi-file prose): the main thread writes files. Use the `/batch-write` skill. Subagents should not be used for content generation — they add complexity without meaningful speed gains.
+
+**For code generation and refactoring**: subagents can write files directly (including via worktree isolation). Code files are smaller and benefit from parallel exploration.
