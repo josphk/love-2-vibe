@@ -25,8 +25,8 @@ Each module below is a summary. Click the "Deep dive" link on any module to open
 **Relationship to other topics:**
 - [Game Design Theory Module 5: Economy](../game-design-theory/module-05-game-economy-resource-design.md) covers conceptual vocabulary (sources/sinks, opportunity cost). Game Balance applies it with formulas.
 - [Game Design Theory Module 6: Difficulty](../game-design-theory/module-06-difficulty-challenge-fairness.md) covers the player experience of difficulty. Game Balance is the math under the hood.
-- [GAS Module 1: Attributes](../gas/module-01-attributes-and-modifier-stacking.md) covers implementation of modifier stacking. Game Balance covers stacking as a design choice.
-- [GAS Module 3: Effects](../gas/module-03-gameplay-effects.md) covers effect context and scaling. Game Balance covers formula design.
+- [GAS Module 1: Attributes](../../programming/gas/module-01-attributes-and-modifier-stacking.md) covers implementation of modifier stacking. Game Balance covers stacking as a design choice.
+- [GAS Module 3: Effects](../../programming/gas/module-03-gameplay-effects.md) covers effect context and scaling. Game Balance covers formula design.
 - [Game AI Module 9: Boss AI](../game-ai/module-09-boss-ai-patterns.md) covers boss encounter patterns. Game Balance covers the stat tuning behind them.
 
 ---

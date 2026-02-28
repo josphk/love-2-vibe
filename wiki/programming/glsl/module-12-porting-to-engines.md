@@ -190,7 +190,7 @@ void fragment() {
 - Aspect ratio correction uses `SCREEN_PIXEL_SIZE` instead of `iResolution`
 - No `#define` — use `const` or just inline the value
 
-For more on Godot shaders, see the [Godot Shaders & Stylized Rendering module](../godot/module-06-shaders-stylized-rendering.md).
+For more on Godot shaders, see the [Godot Shaders & Stylized Rendering module](../../engines/godot/module-06-shaders-stylized-rendering.md).
 
 ---
 
@@ -316,7 +316,7 @@ local shader = love.graphics.newShader([[
 ]])
 ```
 
-For more on Love2D shaders, see the [Love2D Learning Roadmap](../love2d/love2d-learning-roadmap.md).
+For more on Love2D shaders, see the [Love2D Learning Roadmap](../../engines/love2d/love2d-learning-roadmap.md).
 
 ---
 
@@ -496,7 +496,7 @@ The full ShaderToy raymarcher from Module 10 ports almost directly — you just 
 />
 ```
 
-For more on R3F shaders, see the [R3F Shaders & Stylized Rendering module](../r3f/module-06-shaders-stylized-rendering.md).
+For more on R3F shaders, see the [R3F Shaders & Stylized Rendering module](../../engines/r3f/module-06-shaders-stylized-rendering.md).
 
 ---
 
@@ -723,7 +723,7 @@ This tests the full pipeline: rendering a scene, capturing it as a texture, and 
 | [Love2D Shader Documentation](https://love2d.org/wiki/love.graphics.newShader) | Docs | Love2D shader API with examples. Covers `effect()`, `position()`, and `extern`. |
 | [Three.js ShaderMaterial Docs](https://threejs.org/docs/#api/en/materials/ShaderMaterial) | Docs | Three.js shader material API, including built-in uniforms and attributes. |
 | [From ShaderToy to Three.js](https://blog.maximeheckel.com/posts/the-study-of-shaders-with-react-three-fiber/) | Blog | Step-by-step guide to porting ShaderToy effects to React Three Fiber. Practical and visual. |
-| [Godot Shaders Wiki](../godot/module-06-shaders-stylized-rendering.md) | Wiki | This roadmap's deep dive on Godot-specific shader techniques. |
+| [Godot Shaders Wiki](../../engines/godot/module-06-shaders-stylized-rendering.md) | Wiki | This roadmap's deep dive on Godot-specific shader techniques. |
 
 ---
 

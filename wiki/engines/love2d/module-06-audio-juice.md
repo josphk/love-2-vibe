@@ -1473,7 +1473,7 @@ Display the current state of each toggle on screen (e.g., "SFX: ON", "Shake: OFF
 | [hump Library](https://github.com/vrld/hump) | Library | Alternative to flux for tweening, plus timers, vectors, and game states. |
 | [Freesound.org](https://freesound.org) | Resource | Community sound library. Requires free account. Check licenses. |
 | [Incompetech](https://incompetech.com/music/) | Resource | Kevin MacLeod's royalty-free music library. Requires attribution (CC-BY). |
-| [Game Design Theory Module 9: Aesthetics, Feel & Juice](../game-design-theory/module-09-aesthetics-feel-juice.md) | Wiki module | The design theory companion to this implementation guide. Covers Steve Swink's full framework, the animation principles, and the philosophy behind juice. |
+| [Game Design Theory Module 9: Aesthetics, Feel & Juice](../../design/game-design-theory/module-09-aesthetics-feel-juice.md) | Wiki module | The design theory companion to this implementation guide. Covers Steve Swink's full framework, the animation principles, and the philosophy behind juice. |
 
 ---
 

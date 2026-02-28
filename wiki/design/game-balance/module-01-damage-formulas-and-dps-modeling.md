@@ -427,4 +427,4 @@ Design a roguelike damage system with 3 bonus categories: "Might" (additive with
 - **"Effective HP and Armor Math"** — League of Legends and Dota 2 theorycrafting communities have analyzed these formulas exhaustively. The math transfers to any game.
 - **"Armor Penetration and Effective Defense"** — search for blog posts on armor pen as a mechanic. Armor penetration creates secondary breakpoints and adds a stat interaction layer.
 - **"GDC: Math for Game Programmers"** — Squirrel Eiserloh's series covers curves and formulas with interactive examples. The damage formula session is directly relevant.
-- **[GAS Module 1: Attributes & Modifier Stacking](../gas/module-01-attributes-and-modifier-stacking.md)** — covers the implementation of modifier pipelines. This module covers the design choices that determine how those modifiers should stack.
+- **[GAS Module 1: Attributes & Modifier Stacking](../../programming/gas/module-01-attributes-and-modifier-stacking.md)** — covers the implementation of modifier pipelines. This module covers the design choices that determine how those modifiers should stack.

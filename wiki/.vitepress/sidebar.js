@@ -69,28 +69,28 @@ function buildAwesomeSidebar(dir) {
 
 // Topic display names for sidebar group headers
 const topics = {
-  'love2d': 'LOVE2D',
-  'godot': 'Godot 4',
-  'r3f': 'React Three Fiber',
-  'ecs': 'ECS',
-  'glsl': 'GLSL Shaders',
-  'game-ai': 'Game AI',
-  'game-balance': 'Game Balance',
-  'gas': 'Gameplay Ability System',
-  'rive': 'Rive',
-  'sound-design': 'Sound Design',
-  'game-design-theory': 'Game Design Theory',
-  'indie-marketing': 'Indie Marketing',
-  'monetization': 'Monetization',
-  'awesome-love2d': 'Awesome LOVE2D',
-  'awesome-gamedev': 'Awesome Gamedev',
+  'engines/love2d': 'LOVE2D',
+  'engines/godot': 'Godot 4',
+  'engines/r3f': 'React Three Fiber',
+  'programming/ecs': 'ECS',
+  'programming/glsl': 'GLSL Shaders',
+  'programming/gas': 'Gameplay Ability System',
+  'design/game-design-theory': 'Game Design Theory',
+  'design/game-balance': 'Game Balance',
+  'design/game-ai': 'Game AI',
+  'art-audio/rive': 'Rive',
+  'art-audio/sound-design': 'Sound Design',
+  'business/indie-marketing': 'Indie Marketing',
+  'business/monetization': 'Monetization',
+  'resources/awesome-love2d': 'Awesome LOVE2D',
+  'resources/awesome-gamedev': 'Awesome Gamedev',
 }
 
 export function generateSidebar() {
   const sidebar = {}
 
   for (const [dir, label] of Object.entries(topics)) {
-    const isAwesome = dir.startsWith('awesome-')
+    const isAwesome = dir.includes('awesome-')
     const items = isAwesome ? buildAwesomeSidebar(dir) : buildTopicSidebar(dir)
 
     sidebar[`/${dir}/`] = [{ text: label, items }]

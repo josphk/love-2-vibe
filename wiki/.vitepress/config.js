@@ -5,8 +5,6 @@ export default defineConfig({
   title: 'Game Dev Wiki',
   description: 'A curated learning resource for game development',
 
-  ignoreDeadLinks: true,
-
   markdown: {
     config: (md) => {
       // Add v-pre to inline code so Vue doesn't treat {{ }} as template expressions
@@ -24,41 +22,46 @@ export default defineConfig({
       {
         text: 'Engines',
         items: [
-          { text: 'LOVE2D', link: '/love2d/love2d-learning-roadmap' },
-          { text: 'Godot 4', link: '/godot/godot4-gamedev-learning-roadmap' },
-          { text: 'React Three Fiber', link: '/r3f/r3f-gamedev-learning-roadmap' },
+          { text: 'LOVE2D', link: '/engines/love2d/love2d-learning-roadmap' },
+          { text: 'Godot 4', link: '/engines/godot/godot4-gamedev-learning-roadmap' },
+          { text: 'React Three Fiber', link: '/engines/r3f/r3f-gamedev-learning-roadmap' },
         ],
       },
       {
         text: 'Programming',
         items: [
-          { text: 'ECS', link: '/ecs/ecs-learning-roadmap' },
-          { text: 'GLSL Shaders', link: '/glsl/glsl-learning-roadmap' },
-          { text: 'Game AI', link: '/game-ai/game-ai-learning-roadmap' },
-          { text: 'Game Balance', link: '/game-balance/game-balance-roadmap' },
-          { text: 'Gameplay Ability System', link: '/gas/gas-learning-roadmap' },
+          { text: 'ECS', link: '/programming/ecs/ecs-learning-roadmap' },
+          { text: 'GLSL Shaders', link: '/programming/glsl/glsl-learning-roadmap' },
+          { text: 'Gameplay Ability System', link: '/programming/gas/gas-learning-roadmap' },
+        ],
+      },
+      {
+        text: 'Design',
+        items: [
+          { text: 'Game Design Theory', link: '/design/game-design-theory/game-design-theory-roadmap' },
+          { text: 'Game Balance', link: '/design/game-balance/game-balance-roadmap' },
+          { text: 'Game AI', link: '/design/game-ai/game-ai-learning-roadmap' },
         ],
       },
       {
         text: 'Art & Audio',
         items: [
-          { text: 'Rive', link: '/rive/rive-learning-roadmap' },
-          { text: 'Sound Design', link: '/sound-design/sound-design-learning-roadmap' },
+          { text: 'Rive', link: '/art-audio/rive/rive-learning-roadmap' },
+          { text: 'Sound Design', link: '/art-audio/sound-design/sound-design-learning-roadmap' },
         ],
       },
       {
-        text: 'Design & Business',
+        text: 'Business',
         items: [
-          { text: 'Game Design Theory', link: '/game-design-theory/game-design-theory-roadmap' },
-          { text: 'Indie Marketing', link: '/indie-marketing/indie-marketing-learning-roadmap' },
-          { text: 'Monetization', link: '/monetization/game-monetization-learning-roadmap' },
+          { text: 'Indie Marketing', link: '/business/indie-marketing/indie-marketing-learning-roadmap' },
+          { text: 'Monetization', link: '/business/monetization/game-monetization-learning-roadmap' },
         ],
       },
       {
         text: 'Resources',
         items: [
-          { text: 'Awesome LOVE2D', link: '/awesome-love2d/README' },
-          { text: 'Awesome Gamedev', link: '/awesome-gamedev/README' },
+          { text: 'Awesome LOVE2D', link: '/resources/awesome-love2d/README' },
+          { text: 'Awesome Gamedev', link: '/resources/awesome-gamedev/README' },
         ],
       },
     ],
