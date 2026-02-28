@@ -77,13 +77,15 @@ This is the magic of game design. You don't script every moment — you build sy
 - **Balancing loops:** Most good games mix both. Pure positive loops end quickly. Pure negative loops feel stagnant.
 - **Interconnected systems:** When system A's output is system B's input. Dwarf Fortress: weather → crops → food → mood → productivity → defense → survival.
 
+**Practical frameworks:** An 8-step systems mapping methodology (with Hades worked example), a Loop Balance Audit framework, and a Broken Design Gallery with four diagnosed failures and fixes. Four case studies: Breath of the Wild, Dwarf Fortress, Factorio (recursive composition), and Into the Breach (minimum viable emergence).
+
 **Read:**
 - "Thinking in Systems" by Donella Meadows — not a game design book, but the best book on systems thinking. Read chapters 1–3 at minimum. (Available as ebook/print, well worth buying.)
 - "Emergent Gameplay" section of the game design wiki: https://www.gamedeveloper.com — search for emergent design articles
 
-**Exercise:** Map the systems in a game you know well. Draw boxes for each system (economy, combat, movement, weather, etc.) and arrows showing how they feed into each other. Where are the positive feedback loops? Negative ones? Where could you add one connection to make the game more interesting?
+**Exercises (4, all produce artifacts):** Full system map with analysis, feedback loop surgery (diagnosis + redesign with diagrams), paper prototype with 3 interconnected systems, ongoing Emergence Spotter's Journal.
 
-**Time:** 3–5 hours
+**Time:** 5–7 hours
 
 ---
 
@@ -103,14 +105,16 @@ You're not just designing rules — you're designing an experience for a human b
 - **The Bartle Types:** Achievers, Explorers, Socializers, Killers — different players want different things from the same game. Know your audience.
 - **Loss aversion:** Losing something hurts ~2x more than gaining the equivalent feels good. This is why permadeath is intense, and why roguelikes that let you keep *some* progress between runs are so popular.
 
+**Practical frameworks:** Flow curve mapping (step-by-step with worked examples), SDT Failure Patterns table for retention diagnosis, reward timing spectrum, combined Player Motivation Mapping template (flow + SDT + operant conditioning), and the Ethics Spectrum with a 5-question designer checklist. Four case studies: Hades, mobile dark pattern anatomy, Outer Wilds (pure intrinsic motivation), and Stardew Valley (SDT in a sandbox).
+
 **Read:**
 - "A Theory of Fun for Game Design" by Raph Koster — the classic. Written in an accessible, illustrated style. One of the few game design books that's actually fun to read.
 - "Persuasive Games" by Ian Bogost (chapters 1–2) — on how games make arguments through mechanics
 - The "Bartle Taxonomy" original paper: https://mud.co.uk/richard/hcds.htm
 
-**Exercise:** Think about the last game you quit. Why did you stop? Map it to the concepts above. Were you out of flow (too easy/hard)? Did you lose intrinsic motivation? Did it fail on autonomy, competence, or relatedness? Now think about a game you couldn't put down — what was it doing right?
+**Exercises (4, all produce artifacts):** Flow state mapping with annotated timeline, F2P motivation autopsy (classify every action's mechanism), SDT diagnosis and prescription with thermometer diagrams, and Skinner Box dissection with reward map.
 
-**Time:** 3–5 hours
+**Time:** 5–7 hours
 
 ---
 
@@ -172,13 +176,15 @@ Every game has an economy, even if there's no gold. Health is a currency. Time i
 
 - **The "conversion problem":** When players can convert between currencies (trade time for gold, gold for power), one path will always be optimal, and players will find it.
 
+**Practical frameworks:** An 8-step economy audit methodology (with Balatro worked example), a Broken Economy Gallery (four diagnosed failures with fixes), an Economy Patterns Library (8 named patterns: drip feed, boom/bust, prestige reset, mutual exclusion, etc.), and concrete spreadsheet column structure for tuning. Four case studies: Diablo 3's auction house, Slay the Spire's multi-resource elegance, Balatro (exponential scaling done right), and Resident Evil 4 (spatial economy).
+
 **Read:**
 - "Machinations" tool and theory: https://machinations.io — a visual language for designing game economies. The free tier lets you model and simulate. Reading the documentation alone teaches you economy design.
 - "Game Mechanics: Advanced Game Design" by Joris Dormans and Ernest Adams — the best book on internal game economies and system modeling
 
-**Exercise:** Pick a roguelike you've played (Slay the Spire, Hades, Balatro). List every resource the player manages (health, gold, cards, time, etc.). For each, identify the sources and sinks. Where does the tension come from? What happens if you remove one resource — does the game collapse?
+**Exercises (4, all produce artifacts):** Full economy audit (two-page economy map), economy sandbox paper prototype (build, break, fix with dice), multi-currency design challenge (one-page economy design doc), and economy autopsy (500-word diagnosis of a flawed economy).
 
-**Time:** 3–5 hours
+**Time:** 5–8 hours
 
 ---
 
@@ -204,13 +210,15 @@ The difference between "hard" and "unfair" is the difference between Dark Souls 
 
 - **Punishment proportional to mistake:** Losing 30 seconds of progress for a small mistake feels right. Losing 30 minutes feels devastating. Save points, checkpoints, and respawn systems are difficulty design.
 
+**Practical frameworks:** A 6-point Readability Checklist, difficulty mix profiling (execution/knowledge/decision), Skill Floor/Ceiling 2x2 matrix, a 20-parameter difficulty knob inventory with step-by-step Assist Mode design guide, five named failure scenarios for the "Could I Have Won?" test, a punishment calibration scale (Level 0–5), and "The Difficulty Contract" framework for managing player expectations. Four case studies: Celeste, Elden Ring, Slay the Spire (decision complexity), and Into the Breach (perfect information fairness).
+
 **Read:**
 - "What Makes Celeste's Assist Mode Special" — search for text analyses of Celeste's accessibility design
 - "Difficulty in Game Design" by Game Developer (formerly Gamasutra) — multiple excellent articles under this topic
 
-**Exercise:** Play a game on the hardest difficulty for 30 minutes. Every time you fail, write down: (1) did I understand why? (2) did I know what to do differently? (3) how much progress did I lose? (4) did I want to try again? Map your frustration and motivation over the 30 minutes. What kept you going or made you quit?
+**Exercises (4, all produce artifacts):** 10-death failure autopsy with readability scores and redesign, difficulty knob inventory + Assist Mode design (parameter inventory + 5-toggle spec), difficulty contract analysis (three games compared), and Skill Floor/Ceiling matrix mapping (10 games placed).
 
-**Time:** 2–4 hours
+**Time:** 5–7 hours
 
 ---
 
@@ -294,14 +302,16 @@ Game feel is the invisible difference between a game that's "fine" and one that'
 
 - **The "mute test":** Play your favorite action game on mute. Notice how much less satisfying everything feels. That gap is the audio design doing its job.
 
+**Practical frameworks:** Six-Component Scorecard for diagnosing feel, Juice Layering Order (7 layers, implemented in sequence), Weight Design Spec template with Monster Hunter worked example, sound anatomy (transient/body/tail), Synesthesia Intensity Scale, five Feel Archetypes (Precision Dasher, Deliberate Warrior, Flowing Explorer, Kinetic Brawler, Atmospheric Wanderer), genre-appropriate juice levels, a Juice Budget allocation model, a step-by-step Feel Design Process, and a comprehensive Feel Implementation Checklist. Four case studies: Nuclear Throne (the masters of screenshake), Celeste (transcendent movement), Hollow Knight (precision feel on an indie budget), and DOOM 2016 (first-person feel and the Glory Kill loop).
+
 **Read:**
 - "Game Feel" by Steve Swink — THE book on this topic. Dense but excellent.
 - "Juice It or Lose It" — search for the talk transcript/write-up by Martin Jonasson & Petri Purho. (Originally a GDC talk, but text summaries exist and the concepts are clearly explained.)
 - "The Art of Screen Shake" — Vlambeer (Nuclear Throne devs) write-up on why their games feel so impactful. Search for text summaries.
 
-**Exercise:** Pick any game. Play it for 10 minutes normally. Then turn off the sound and play another 10 minutes. Write down every moment that felt worse without audio. What was the sound doing? Now, if you can, watch gameplay footage at 0.25x speed. Look for the tiny details: hit pause frames, camera shake, particle bursts, animation squash. Count how many "juice" effects happen in a single enemy kill.
+**Exercises (5, all produce artifacts):** Mute test + Six-Component Scorecard comparison (two games scored), juice layering from zero (7-stage recording sequence), weight spec design (two attack specs + blind test), feel archetype reverse-engineering (two games profiled + hybrid spec), and a diagnostic gauntlet (5 tests on one game).
 
-**Time:** 2–4 hours
+**Time:** 5–8 hours
 
 ---
 
