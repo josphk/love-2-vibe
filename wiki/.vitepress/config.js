@@ -5,6 +5,11 @@ export default defineConfig({
   title: 'Game Dev Wiki',
   description: 'A curated learning resource for game development',
 
+  // Allow links to not-yet-written modules (sound-design has a roadmap but no module files yet)
+  ignoreDeadLinks: [
+    /\.\/module-\d+-/,
+  ],
+
   markdown: {
     config: (md) => {
       // Add v-pre to inline code so Vue doesn't treat {{ }} as template expressions

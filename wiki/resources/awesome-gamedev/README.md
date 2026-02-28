@@ -377,7 +377,7 @@ may be removed upon clarification.
 
 
 ### C# ###
-* [osu!](446) - A free-to-win rhythm game. Rhythm is just a click away! [MIT][403].
+* [osu!][446] - A free-to-win rhythm game. Rhythm is just a click away! [MIT][403].
 
 ### CoffeeScript ###
 
@@ -698,7 +698,7 @@ We aim for *complete* and *current* resources here whenever possible.
 These are collections of game development-related talks, podcasts etc. that
 might be interesting or informative to people seeking to design games.
 
-* [Composers Play](423) (podcast) - Listen to a video game composer discuss
+* [Composers Play][423] (podcast) - Listen to a video game composer discuss
   soundtracks of iconic games such as Mass Effect, Duke Nukem II, Doom, and
   System Shock with their composers, often while playing the game.
 * [GameDevRadio][268] (podcast) - A series of online radio shows devoted to
