@@ -8,1550 +8,1087 @@
 
 ## Overview
 
-Godot's UI system is built on `Control` nodes — a completely separate branch of the scene tree from `Node2D` and `Node3D`. Control nodes understand layout: anchors that keep buttons pinned to screen corners at any resolution, containers that arrange children automatically, themes that apply styles globally without touching individual nodes. Once you internalize how anchors and size flags interact, you stop fighting the UI system and start building fast.
+Every game needs UI: menus, HUDs, health bars, inventory screens, loading indicators. Godot has a complete UI system built on Control nodes — a hierarchy of buttons, labels, containers, and layout tools that handles anchoring, responsive sizing, theming, and keyboard/gamepad navigation out of the box. The system is mature, expressive, and deeply integrated with the rest of the engine. You won't be reaching for a third-party library here.
 
-The real insight is that Godot treats UI as a composable scene system, not a special editor mode. Your main menu is a scene. Your HUD is a scene. Your pause menu is a scene. You instance them, hide them, show them, and pass data between them the same way you do with any other scene. `CanvasLayer` puts UI on top of the 3D world without any z-fighting or coordinate confusion. `SubViewport` lets you render the game world into a texture and display it as a minimap widget. Everything composes.
+The key mental shift: Control nodes are separate from your 3D scene. They live in a CanvasLayer that renders on top of everything, completely unaffected by the 3D camera. You build layouts with containers (VBoxContainer, HBoxContainer, MarginContainer) that automatically handle sizing and placement, then style everything with a Theme resource that controls fonts, colors, and styleboxes globally across every Control node in your scene. Change the Theme once; the whole UI updates.
 
-By the end of this module you'll build a complete game UI: a main menu with animated transitions, a HUD with health bar and ammo counter, a pause menu overlay, a minimap using SubViewport, and an async loading screen with a real progress bar. The mini-project ties everything together. You'll also handle gamepad navigation, focus management, and rich text with BBCode — the things that separate a polished UI from a functional one.
+By the end of this module, you'll build a complete game UI kit: a main menu with Start/Settings/Credits buttons, an in-game HUD with health bar and score, a pause menu overlay, a minimap rendered via SubViewport, and a loading screen with a real progress bar backed by Godot's threaded ResourceLoader. These aren't toy examples — the patterns here are the same ones used in shipped games.
 
 ---
 
-## 1. Control Node Fundamentals
+## 1. Control Nodes: The UI Building Blocks
 
-### Control vs Node2D
+`Control` is the base class for every UI element in Godot. It has a `position`, `size`, `rect_min_size`, anchor settings, and a full focus system. You never use `Control` directly — you use its many subclasses. Here's the full toolkit.
 
-Control nodes and Node2D nodes live in separate coordinate systems. Control nodes are sized and positioned by the layout system. Node2D nodes use `position` in world pixels. You can mix them — `CanvasItem` is the common ancestor — but inside a UI tree you almost always want Control nodes exclusively. Using a `Node2D` inside a `Container` breaks the container's layout logic.
+### The Core Nodes
 
-```
-Node2D          ← 2D world space, position in pixels
-Control         ← UI layout space, sized by anchors/containers
-  Button
-  Label
-  VBoxContainer
-    HBoxContainer
-      TextureRect
-      Label
-```
+**Label** — Displays text. Key properties:
+- `text`: the string to display
+- `horizontal_alignment` / `vertical_alignment`: LEFT, CENTER, RIGHT, TOP, BOTTOM
+- `autowrap_mode`: wraps text inside the available rect
+- `visible_characters`: how many characters to show (use for typewriter effects)
 
-### The Rect System
+**Button** — A clickable button. The most-used UI node. Key properties and signals:
+- `text`: button label
+- `pressed` signal: emitted on click
+- `disabled`: grays out the button and stops input
+- `toggle_mode`: turns it into a toggle (on/off)
+- Use `TextureButton` instead when you want image-based buttons with hover/pressed/disabled states.
 
-Every Control node has a `Rect` that defines its position and size. You can read it at runtime:
+**TextureRect** — Displays a `Texture2D`. Stretch modes control how the image fills the rect:
+- `STRETCH_KEEP`: original size, no scaling
+- `STRETCH_SCALE`: stretch to fill (may distort)
+- `STRETCH_KEEP_ASPECT_CENTERED`: scale to fit, maintain ratio, center it
+- `STRETCH_TILE`: tile the texture
+
+**ProgressBar** — Health bars, loading bars, XP bars. Key properties:
+- `value`: current value (0–100 by default)
+- `min_value` / `max_value`: define the range
+- `show_percentage`: toggles the built-in percentage label
+- Style the fill and background separately via the "fill" and "background" StyleBoxes in the theme.
+
+**LineEdit** — Single-line text input. Player name entry, chat, search boxes. Signals:
+- `text_changed(new_text)`: fires on every keystroke
+- `text_submitted(new_text)`: fires when Enter is pressed
+
+**TextEdit** — Multi-line text area. Debug consoles, notes, editors. Has `text_changed` but no submit signal — handle that yourself with `get_line()`.
+
+**RichTextLabel** — Formatted text using BBCode. Great for dialogue, item descriptions, changelogs:
+- `bbcode_enabled = true`: enable the parser
+- `text = "[b]Bold[/b] and [color=red]red[/color]"`: set content
+- `visible_characters`: control how many characters render (typewriter effect)
+- Built-in animated effects: `[wave]`, `[shake]`, `[rainbow]`
+
+**Panel** — A styled background rectangle. No content on its own — nest other nodes inside it. Its appearance is controlled entirely by its "panel" StyleBox.
+
+**CheckBox / CheckButton** — Boolean toggles. CheckBox looks like a checkbox, CheckButton looks like an iOS-style toggle. Both emit `toggled(button_pressed: bool)`.
+
+**SpinBox** — Numeric input with up/down arrows. Good for settings that need integer ranges.
+
+**HSlider / VSlider** — Drag a handle along a track. Perfect for volume and brightness sliders. Emits `value_changed(value: float)`.
+
+**OptionButton** — A dropdown selector. Add items with `add_item("Label", id)`. Emits `item_selected(index: int)`.
+
+### Creating Nodes from Code
+
+Sometimes you need to build UI dynamically:
 
 ```gdscript
 extends Control
 
 func _ready() -> void:
-    # Size of this control in pixels
-    var size: Vector2 = get_size()
+    var label := Label.new()
+    label.text = "Hello, Godot!"
+    label.add_theme_font_size_override("font_size", 32)
+    add_child(label)
 
-    # Position relative to parent
-    var pos: Vector2 = get_position()
-
-    # Both combined — also available as property
-    var rect: Rect2 = get_rect()
-
-    # Global position (in screen space)
-    var global_pos: Vector2 = global_position
-
-    print("My rect: ", rect)
+    var button := Button.new()
+    button.text = "Click Me"
+    button.pressed.connect(func(): print("Clicked!"))
+    add_child(button)
 ```
 
-### Anchors and Offsets
-
-Anchors define how a Control's edges are attached to its parent. Each of the four edges (left, top, right, bottom) has an anchor value from `0.0` to `1.0`, where `0.0` is the parent's top/left edge and `1.0` is the parent's bottom/right edge.
-
-The Inspector shows these as **Anchor Left**, **Anchor Top**, **Anchor Right**, **Anchor Bottom**. The **Offset** values add pixel offsets from the anchor point.
-
-Common anchor presets (the dropdown in the toolbar when a Control is selected):
-
-| Preset | Anchors | Use case |
-|--------|---------|----------|
-| Top Left | (0,0,0,0) | Fixed position, top-left corner |
-| Top Right | (1,0,1,0) | Pin to top-right corner |
-| Bottom Left | (0,1,0,1) | Pin to bottom-left |
-| Bottom Right | (1,1,1,1) | Pin to bottom-right |
-| Center | (0.5,0.5,0.5,0.5) | Centered, fixed size |
-| Full Rect | (0,0,1,1) | Fill entire parent |
-| Top Wide | (0,0,1,0) | Stretch across top |
-| Left Wide | (0,0,0,1) | Stretch down left side |
-
-Setting anchors in code:
-
-```gdscript
-extends Control
-
-func _ready() -> void:
-    # Full rect — fill entire parent
-    anchor_left = 0.0
-    anchor_top = 0.0
-    anchor_right = 1.0
-    anchor_bottom = 1.0
-    offset_left = 0.0
-    offset_top = 0.0
-    offset_right = 0.0
-    offset_bottom = 0.0
-
-    # Or use the convenience method
-    set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-
-    # Center preset with a specific size
-    set_anchors_and_offsets_preset(Control.PRESET_CENTER)
-    size = Vector2(400.0, 300.0)
-```
-
-### Grow Direction
-
-When the parent resizes, a Control can grow in different directions. The **Grow Direction** property controls which way the Control expands relative to its anchor point:
-
-- `BEGIN` — grows from right to left (or bottom to top)
-- `END` — grows from left to right (or top to bottom)
-- `BOTH` — grows from the center outward
-
-This matters for things like a health bar anchored to the top-left: you want it to grow to the right as health increases, not grow left and overflow off-screen.
-
-```gdscript
-# Health bar pinned to top-left, grows right
-@onready var health_bar: ProgressBar = $HealthBar
-
-func _ready() -> void:
-    health_bar.anchor_left = 0.0
-    health_bar.anchor_top = 0.0
-    health_bar.anchor_right = 0.0   # Fixed right edge
-    health_bar.anchor_bottom = 0.0
-    health_bar.grow_horizontal = Control.GROW_DIRECTION_END  # Grows rightward
-```
-
-### Minimum Size
-
-Every Control has a **minimum size** — the smallest it can shrink to while still being useful. Containers respect minimum size when laying out children. A Button's minimum size is determined by its text and icon. A Container's minimum size is the sum of its children's minimum sizes plus separation.
-
-You can override minimum size in the Inspector (**Custom Minimum Size**) or in code:
-
-```gdscript
-func _ready() -> void:
-    # Force this control to be at least 200x50 pixels
-    custom_minimum_size = Vector2(200.0, 50.0)
-```
+The `add_theme_*_override` methods let you override a single property from the theme on a specific node — useful for one-off adjustments without breaking your global Theme.
 
 ---
 
-## 2. Layout with Containers
+## 2. Containers: Automatic Layout
 
-Containers are Control nodes that automatically arrange their children. You almost never manually position child Controls inside a Container — you set their **size flags** and the Container handles the rest.
+This is the rule: **never position UI nodes with absolute coordinates**. Absolute positions break on different screen sizes, different resolutions, and different aspect ratios. Containers solve this. They automatically measure their children, apply spacing, and update when the window resizes. Always use containers.
 
-### Size Flags
+### The Container Toolkit
 
-Size flags tell a Container how a child wants to be sized on each axis:
+**VBoxContainer** — Stacks children vertically, top to bottom. Adds separation between children (controlled by the `separation` constant in the theme).
+
+**HBoxContainer** — Stacks children horizontally, left to right.
+
+**MarginContainer** — Adds padding around a single child. Use it as the outermost wrapper for any panel to keep content away from the edges. Properties: `add_theme_constant_override("margin_left", 16)` etc.
+
+**CenterContainer** — Centers its single child in the available space. Use it for splash screens, loading indicators, or anything that should be dead-center.
+
+**GridContainer** — Grid layout. Set `columns` to define the number of columns; rows are added automatically. Perfect for inventory grids, settings pages, ability bars.
+
+**PanelContainer** — Combines MarginContainer behavior with a Panel background. Draws a StyleBox behind its content. Saves you from nesting a Panel + MarginContainer + content.
+
+**ScrollContainer** — Makes its content scrollable when it exceeds the container size. Wrap a VBoxContainer inside one for long lists. Set `horizontal_scroll_mode` and `vertical_scroll_mode` to SCROLL_MODE_AUTO to only show scrollbars when needed.
+
+**HSplitContainer / VSplitContainer** — Two children separated by a draggable divider. Useful for editor-style UIs and debug panels.
+
+**FlowContainer** — Wraps children like a word-processor wraps words. Underused but handy for tag clouds and flex-layout-style UIs.
+
+### Nesting Containers for Real Layouts
+
+Real menus require nesting. Here's a typical main menu:
+
+```
+MarginContainer
+  └── VBoxContainer
+      ├── Label ("My Game")
+      ├── Control (spacer, custom_minimum_size.y = 40)
+      ├── VBoxContainer (button group)
+      │   ├── Button ("Start Game")
+      │   ├── Button ("Settings")
+      │   ├── Button ("Credits")
+      │   └── Button ("Quit")
+      └── Label ("v1.0.0")
+```
+
+The outer `MarginContainer` keeps everything away from screen edges. The inner `VBoxContainer` for buttons keeps them evenly spaced. No pixel math required.
+
+### Size Flags: Controlling How Children Use Space
+
+Every Control node has `size_flags_horizontal` and `size_flags_vertical`. These tell the parent container how to allocate leftover space.
 
 | Flag | Meaning |
 |------|---------|
-| `SIZE_SHRINK_BEGIN` | Use minimum size, align to start |
-| `SIZE_SHRINK_CENTER` | Use minimum size, center |
-| `SIZE_SHRINK_END` | Use minimum size, align to end |
-| `SIZE_FILL` | Expand to fill available space |
-| `SIZE_EXPAND` | Share extra space with other EXPAND children |
-| `SIZE_EXPAND_FILL` | Fill AND share extra space (most common) |
+| `SHRINK_BEGIN` | Align to start, take minimum size |
+| `SHRINK_CENTER` | Align to center, take minimum size |
+| `SHRINK_END` | Align to end, take minimum size |
+| `FILL` | Stretch to fill available space |
+| `EXPAND` | Request a share of extra space |
+| `EXPAND + FILL` | Take all available extra space and fill it |
 
-In practice you'll use `SIZE_EXPAND_FILL` for elements you want to stretch, and `SIZE_SHRINK_*` variants for fixed-size elements.
-
-```gdscript
-extends VBoxContainer
-
-func _ready() -> void:
-    # Make a child fill the horizontal space
-    var label: Label = $MyLabel
-    label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-
-    # Center something vertically without expanding
-    var icon: TextureRect = $Icon
-    icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-```
-
-### VBoxContainer and HBoxContainer
-
-The workhorses of UI layout. `VBoxContainer` stacks children vertically, `HBoxContainer` stacks them horizontally. Set **Separation** in the Inspector to add spacing between children.
+The most common pattern: give a spacer node `EXPAND + FILL` to push subsequent elements to the bottom (or right in HBoxContainer):
 
 ```gdscript
-# Scene tree:
-# VBoxContainer
-#   Label ("Player Stats")
-#   HBoxContainer
-#     Label ("HP:")
-#     ProgressBar (size_flags_horizontal = EXPAND_FILL)
-#   HBoxContainer
-#     Label ("Ammo:")
-#     Label (ammo_count)
-#   Button ("Back to Menu")
-
-extends VBoxContainer
-
-@onready var hp_bar: ProgressBar = $HP_Row/HPBar
-@onready var ammo_label: Label = $Ammo_Row/AmmoLabel
-
-func update_hp(current: float, max_hp: float) -> void:
-    hp_bar.max_value = max_hp
-    hp_bar.value = current
-
-func update_ammo(current: int, max_ammo: int) -> void:
-    ammo_label.text = "%d / %d" % [current, max_ammo]
+var spacer := Control.new()
+spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+add_child(spacer)  # Pushes everything after it to the bottom
 ```
 
-### GridContainer
+### Custom Minimum Size
 
-Arranges children in a grid. Set **Columns** and children flow into rows automatically.
+Every Control has `custom_minimum_size`. Set it to guarantee a minimum footprint even when the container would otherwise shrink it:
 
 ```gdscript
-# Scene tree:
-# GridContainer (columns = 4)
-#   TextureButton (item_0)
-#   TextureButton (item_1)
-#   ...
-
-extends GridContainer
-
-const ITEM_SCENE: PackedScene = preload("res://ui/inventory_item.tscn")
-
-func populate_inventory(items: Array[ItemData]) -> void:
-    # Clear existing children
-    for child in get_children():
-        child.queue_free()
-
-    for item_data in items:
-        var slot: TextureButton = ITEM_SCENE.instantiate()
-        add_child(slot)
-        slot.setup(item_data)
+button.custom_minimum_size = Vector2(200, 48)
 ```
 
-### MarginContainer
+This is how you make uniform button sizes without hard-coding positions.
 
-Adds padding around its single child. The **Margin Left/Right/Top/Bottom** theme overrides control the padding size. Useful for adding breathing room inside panels.
+---
+
+## 3. Anchors and Margins
+
+Containers handle layout inside a parent. Anchors handle positioning when a node needs to stick to a specific region of its parent — especially important for HUD elements that must be pinned to screen corners regardless of resolution.
+
+### How Anchors Work
+
+An anchor defines a reference point as a fraction of the parent's size (0.0 to 1.0). Four anchor values: `anchor_left`, `anchor_right`, `anchor_top`, `anchor_bottom`. Then `offset_left/right/top/bottom` define the pixel distance from those anchor points.
+
+For example, to pin a node to the top-right corner:
+```
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_top = 0.0
+anchor_bottom = 0.0
+offset_left = -200   # 200px from the right edge
+offset_right = -8    # 8px margin from the right
+offset_top = 8       # 8px from the top
+offset_bottom = 56   # 48px tall
+```
+
+### Anchor Presets
+
+You'll almost never set raw anchor values. In the editor, the toolbar shows an anchor preset picker. In code, use `set_anchors_preset()`:
 
 ```gdscript
-# Add 20px padding on all sides using theme override
-func _ready() -> void:
-    var margin: MarginContainer = $MarginContainer
-    margin.add_theme_constant_override("margin_left", 20)
-    margin.add_theme_constant_override("margin_right", 20)
-    margin.add_theme_constant_override("margin_top", 20)
-    margin.add_theme_constant_override("margin_bottom", 20)
+# Available presets
+control.set_anchors_preset(Control.PRESET_FULL_RECT)          # fills parent
+control.set_anchors_preset(Control.PRESET_TOP_LEFT)
+control.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+control.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+control.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+control.set_anchors_preset(Control.PRESET_CENTER)
+control.set_anchors_preset(Control.PRESET_CENTER_TOP)
+control.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+control.set_anchors_preset(Control.PRESET_LEFT_WIDE)          # full height, left side
+control.set_anchors_preset(Control.PRESET_RIGHT_WIDE)         # full height, right side
 ```
 
-### CenterContainer
+### HUD Layout with Corner Anchors
 
-Centers its single child both horizontally and vertically. Simple, effective. Use it when you have a panel or dialog box that needs to sit in the middle of the screen.
+A typical HUD pins different elements to different corners:
 
 ```
-CanvasLayer
-  CenterContainer (anchors: full rect)
-    PanelContainer (your dialog box, has a fixed size)
-      VBoxContainer
-        Label
-        HBoxContainer
-          Button ("Yes")
-          Button ("No")
+CanvasLayer (layer = 1)
+  └── Control (FULL_RECT anchor — fills viewport)
+      ├── HealthBar (ProgressBar, PRESET_TOP_LEFT, offset 16px from edges)
+      ├── ScoreLabel (Label, PRESET_TOP_RIGHT, offset 16px from edges)
+      ├── MinimapRect (TextureRect, PRESET_BOTTOM_RIGHT, offset 16px from edges)
+      └── AmmoLabel (Label, PRESET_BOTTOM_LEFT, offset 16px from edges)
 ```
 
-### ScrollContainer
-
-Wraps a child that may be larger than the visible area. Scroll bars appear automatically. Common for inventory lists, log windows, and settings pages with many options.
+Each element snaps to its corner and stays there regardless of window size. If you resize the game window, the health bar stays top-left, the score stays top-right.
 
 ```gdscript
-extends ScrollContainer
+@onready var health_bar: ProgressBar = $Control/HealthBar
+@onready var score_label: Label = $Control/ScoreLabel
 
-@onready var content: VBoxContainer = $VBoxContainer
+func update_health(current: int, maximum: int) -> void:
+    health_bar.max_value = maximum
+    health_bar.value = current
 
-func add_log_entry(text: String) -> void:
-    var entry: Label = Label.new()
-    entry.text = text
-    entry.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    content.add_child(entry)
-
-    # Scroll to bottom after adding — defer one frame so layout updates first
-    await get_tree().process_frame
-    scroll_vertical = get_v_scroll_bar().max_value
-```
-
-### SplitContainer
-
-Provides a resizable split between two children — useful for editor-style UIs with a side panel and main viewport.
-
-```gdscript
-@onready var split: HSplitContainer = $HSplitContainer
-
-func _ready() -> void:
-    # Set initial split position in pixels
-    split.split_offset = 250
-
-    # React to user dragging the split
-    split.dragged.connect(func(offset: int) -> void:
-        print("Split dragged to: ", offset)
-    )
+func update_score(score: int) -> void:
+    score_label.text = "Score: %d" % score
 ```
 
 ---
 
-## 3. Common UI Controls
+## 4. CanvasLayer: UI Over 3D
 
-### Button
+Here is the most important structural rule for game UI: **never parent your HUD to a Camera3D or any 3D node**. If you do, the HUD moves with the camera, which is almost never what you want. Use `CanvasLayer` instead.
 
-The most used Control. Key properties:
+`CanvasLayer` is a special node that renders its children on a 2D canvas completely independent of the 3D viewport. It doesn't move with the camera. It doesn't get depth-tested. It just draws on top of everything at a fixed screen position.
 
-```gdscript
-extends Button
-
-func _ready() -> void:
-    # Text and icon
-    text = "Play Game"
-    icon = preload("res://ui/icons/play.png")
-
-    # Alignment
-    alignment = HORIZONTAL_ALIGNMENT_CENTER
-
-    # Expand icon to fill height
-    expand_icon = true
-
-    # Toggle button (stays pressed)
-    toggle_mode = true
-
-    # Connect signals
-    pressed.connect(_on_pressed)
-    toggled.connect(_on_toggled)
-
-func _on_pressed() -> void:
-    print("Button pressed")
-
-func _on_toggled(button_pressed: bool) -> void:
-    print("Toggle state: ", button_pressed)
-```
-
-`TextureButton` uses separate textures for each state (normal, hover, pressed, disabled, focused). Good for custom icon buttons without theme complexity.
-
-### Label
-
-Displays text. Key properties for making text behave:
-
-```gdscript
-extends Label
-
-func _ready() -> void:
-    text = "Score: 9999"
-
-    # Auto-wrap long text
-    autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-
-    # Clip text that overflows (no wrap)
-    clip_text = true
-
-    # Horizontal alignment
-    horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-
-    # Uppercase rendering
-    uppercase = true
-
-    # Override theme font size for this specific label
-    add_theme_font_size_override("font_size", 32)
-
-    # Override color
-    add_theme_color_override("font_color", Color.YELLOW)
-```
-
-### TextureRect
-
-Displays a texture. The **Expand Mode** and **Stretch Mode** determine how the image fills its rect:
-
-| Stretch Mode | Effect |
-|--------------|--------|
-| `STRETCH_SCALE` | Stretch to fill, ignores aspect ratio |
-| `STRETCH_TILE` | Tile the texture |
-| `STRETCH_KEEP` | Display at original size |
-| `STRETCH_KEEP_CENTERED` | Original size, centered |
-| `STRETCH_KEEP_ASPECT` | Scale to fit, maintain aspect ratio |
-| `STRETCH_KEEP_ASPECT_CENTERED` | Same, centered |
-| `STRETCH_KEEP_ASPECT_COVERED` | Scale to cover, maintain aspect ratio (may crop) |
-
-```gdscript
-@onready var portrait: TextureRect = $Portrait
-
-func set_character_portrait(tex: Texture2D) -> void:
-    portrait.texture = tex
-    portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-    portrait.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
-```
-
-### ProgressBar
-
-The standard health/loading bar. Horizontal by default, flip `fill_mode` for vertical.
-
-```gdscript
-extends ProgressBar
-
-func _ready() -> void:
-    min_value = 0.0
-    max_value = 100.0
-    value = 75.0
-
-    # Show/hide the percentage label
-    show_percentage = false
-
-    # Vertical progress bar (grows upward)
-    fill_mode = ProgressBar.FILL_BOTTOM_TO_TOP
-
-func set_health(hp: float, max_hp: float) -> void:
-    max_value = max_hp
-    # Smooth animation using Tween
-    var tween: Tween = create_tween()
-    tween.tween_property(self, "value", hp, 0.2).set_ease(Tween.EASE_OUT)
-```
-
-### LineEdit and TextEdit
-
-`LineEdit` is single-line input. `TextEdit` is multi-line. Both emit signals when content changes.
-
-```gdscript
-extends LineEdit
-
-func _ready() -> void:
-    # Placeholder text
-    placeholder_text = "Enter your name..."
-
-    # Maximum characters
-    max_length = 20
-
-    # Secret mode (passwords)
-    secret = true
-    secret_character = "•"
-
-    # Connect signals
-    text_submitted.connect(_on_submitted)  # Enter key pressed
-    text_changed.connect(_on_text_changed)
-
-func _on_submitted(new_text: String) -> void:
-    print("Player entered: ", new_text)
-
-func _on_text_changed(new_text: String) -> void:
-    # Live validation example
-    if new_text.length() < 3:
-        add_theme_color_override("font_color", Color.RED)
-    else:
-        remove_theme_color_override("font_color")
-```
-
-### OptionButton
-
-A dropdown selector. Cleaner than a series of radio buttons for mutually exclusive choices.
-
-```gdscript
-extends OptionButton
-
-func _ready() -> void:
-    # Populate options
-    add_item("1920x1080")
-    add_item("2560x1440")
-    add_item("3840x2160")
-
-    # Add with metadata — store actual values alongside display text
-    add_item("Low", 0)
-    add_item("Medium", 1)
-    add_item("High", 2)
-    add_item("Ultra", 3)
-
-    # Select by index
-    selected = 1
-
-    # Connect
-    item_selected.connect(_on_quality_selected)
-
-func _on_quality_selected(index: int) -> void:
-    var quality_level: int = get_item_id(index)
-    print("Quality set to: ", quality_level)
-```
-
-### TabContainer
-
-Groups multiple panels with tab headers. Each direct child becomes a tab, labeled with the child's name.
-
-```gdscript
-extends TabContainer
-
-func _ready() -> void:
-    # Set current tab by index
-    current_tab = 0
-
-    # Connect tab change
-    tab_changed.connect(_on_tab_changed)
-
-    # Customize tab alignment
-    tab_alignment = TabBar.ALIGNMENT_CENTER
-
-func _on_tab_changed(tab: int) -> void:
-    match tab:
-        0: print("Gameplay tab")
-        1: print("Graphics tab")
-        2: print("Audio tab")
-        3: print("Controls tab")
-```
-
-### ItemList
-
-A scrollable list of items with optional icons. Good for inventory displays, file browsers, and selection lists.
-
-```gdscript
-extends ItemList
-
-func _ready() -> void:
-    # Add items
-    add_item("Sword")
-    add_item("Shield")
-    add_item("Health Potion")
-
-    # Add with icon
-    var icon: Texture2D = preload("res://icons/sword.png")
-    add_item("Magic Sword", icon)
-
-    # Selection mode
-    select_mode = ItemList.SELECT_SINGLE
-
-    # Allow multiple selection
-    select_mode = ItemList.SELECT_MULTI
-
-    # Connect
-    item_selected.connect(_on_item_selected)
-    item_activated.connect(_on_item_activated)  # Double-click or Enter
-
-func _on_item_selected(index: int) -> void:
-    print("Selected: ", get_item_text(index))
-
-func _on_item_activated(index: int) -> void:
-    print("Activated: ", get_item_text(index))
-    # Use item
-```
-
----
-
-## 4. Themes & Styling
-
-### What a Theme Is
-
-A `Theme` resource is a database of visual properties — fonts, colors, StyleBoxes, icon textures, constants — organized by Control type. Assigning a Theme to a Control node applies it to that node AND all its descendants. One Theme at your scene root styles everything underneath it.
-
-This is the right way to style Godot UI. If you're adding `add_theme_color_override()` calls everywhere, you're fighting the system. Define your game's look in a Theme, assign it once, done.
-
-### Creating a Theme
-
-In the FileSystem dock: right-click → New Resource → Theme. Save it as `res://ui/game_theme.tres`.
-
-Assign it to your root UI node in the Inspector (`Theme` property). Or load it in code:
-
-```gdscript
-extends Control
-
-const GAME_THEME: Theme = preload("res://ui/game_theme.tres")
-
-func _ready() -> void:
-    theme = GAME_THEME
-```
-
-### Editing a Theme
-
-Double-click a `.tres` Theme file to open the Theme editor at the bottom of the screen. You'll see a panel with:
-
-- **Controls** on the left — select which Control type you're styling (Button, Label, ProgressBar, etc.)
-- **Properties** in the middle — Colors, Constants, Fonts, Font Sizes, Icons, Styles
-- **Preview** on the right — live preview of how controls look with your theme
-
-For each Control type, you can override:
-- **Color** — `font_color`, `font_hover_color`, `font_pressed_color`, etc.
-- **Constant** — numeric values like `separation`, `margin`
-- **Font** — font resources per state
-- **Font Size** — point sizes per state
-- **Icon** — texture overrides
-- **Style** — `StyleBox` resources per state (normal, hover, pressed, disabled, focus)
-
-### StyleBoxFlat
-
-`StyleBoxFlat` is a programmatic style — no textures needed. It supports:
-- Background color
-- Border (width, color)
-- Corner radius (rounded corners)
-- Shadow (offset, size, color)
-- Content margins (internal padding)
-
-```gdscript
-# Creating a StyleBoxFlat in code
-func make_button_style() -> StyleBoxFlat:
-    var style: StyleBoxFlat = StyleBoxFlat.new()
-    style.bg_color = Color(0.2, 0.4, 0.8, 1.0)       # Dark blue
-    style.border_width_left = 2
-    style.border_width_right = 2
-    style.border_width_top = 2
-    style.border_width_bottom = 2
-    style.border_color = Color(0.4, 0.6, 1.0, 1.0)   # Light blue border
-    style.corner_radius_top_left = 8
-    style.corner_radius_top_right = 8
-    style.corner_radius_bottom_left = 8
-    style.corner_radius_bottom_right = 8
-    style.content_margin_left = 16.0
-    style.content_margin_right = 16.0
-    style.content_margin_top = 8.0
-    style.content_margin_bottom = 8.0
-    # Drop shadow
-    style.shadow_color = Color(0.0, 0.0, 0.0, 0.5)
-    style.shadow_size = 4
-    style.shadow_offset = Vector2(2.0, 2.0)
-    return style
-
-func _ready() -> void:
-    var btn: Button = $MyButton
-    btn.add_theme_stylebox_override("normal", make_button_style())
-```
-
-### StyleBoxTexture
-
-Uses a texture with nine-patch slicing — the corners stay fixed while the center stretches. Good for UI panels with decorative borders.
-
-```gdscript
-func make_panel_style() -> StyleBoxTexture:
-    var style: StyleBoxTexture = StyleBoxTexture.new()
-    style.texture = preload("res://ui/panel_bg.png")
-    # Define the nine-patch margins (don't stretch these pixel regions)
-    style.texture_margin_left = 16.0
-    style.texture_margin_right = 16.0
-    style.texture_margin_top = 16.0
-    style.texture_margin_bottom = 16.0
-    return style
-```
-
-### Type Variations
-
-Godot 4 lets you create variants of a Control type with custom style within a single Theme. For example, you might want a "DangerButton" that uses red colors but otherwise behaves like a Button.
-
-In the Theme editor: click the **+** button next to "Types", enter `Button`, then check "Create Variation" and name it `DangerButton`. Style it with red backgrounds.
-
-Apply it to a specific button:
-
-```gdscript
-# In the Inspector, set "Theme Type Variation" to "DangerButton"
-# Or in code:
-func _ready() -> void:
-    $DeleteButton.theme_type_variation = "DangerButton"
-```
-
-### Per-Node Overrides vs Theme
-
-Per-node overrides (`add_theme_color_override()`) win over Theme. Use overrides sparingly — for one-off cases where a specific node needs to look different. Use Theme for anything that should be consistent across your game.
-
-```gdscript
-# Good: quick one-off override
-$ErrorLabel.add_theme_color_override("font_color", Color.RED)
-
-# Also good: removing an override to fall back to Theme
-$ErrorLabel.remove_theme_color_override("font_color")
-
-# Check if an override exists
-if $ErrorLabel.has_theme_color_override("font_color"):
-    print("Error label has a color override")
-```
-
-### Loading Fonts
-
-Godot supports `.ttf`, `.otf`, and `.fnt` bitmap fonts. Import a font file, then reference it in your Theme or assign directly:
-
-```gdscript
-func _ready() -> void:
-    var font: FontFile = preload("res://ui/fonts/Roboto-Regular.ttf")
-    $TitleLabel.add_theme_font_override("font", font)
-    $TitleLabel.add_theme_font_size_override("font_size", 48)
-```
-
-For bitmap fonts (pixel art games), `.fnt` files with a matching texture atlas work great. Import them and use `FontFile` the same way.
-
----
-
-## 5. CanvasLayer & UI Layering
-
-### The Problem CanvasLayer Solves
-
-If you put a HUD directly in your 3D game scene as a child of `Node3D` nodes, the camera moving around will not move the HUD (Control nodes aren't in 3D space), but depth sorting and camera transforms can cause subtle issues. More importantly, there's no clean separation between game world and UI.
-
-`CanvasLayer` solves this by creating a completely separate 2D canvas that renders independently from the main viewport. It's always on top. The camera moving in 3D doesn't affect it. This is how HUDs, menus, and overlays should be done.
-
-### Scene Structure
+### Scene Tree Structure
 
 ```
-# Main game scene
-Node3D (GameWorld)
-  CharacterBody3D (Player)
-  MeshInstance3D (Environment)
-  DirectionalLight3D
-  Camera3D
-  CanvasLayer (HUD)         ← UI lives here, layer = 1
-    Control (full rect)
-      HBoxContainer (top bar)
-        HealthBar
-        AmmoCounter
-      Label (score, top-right)
-  CanvasLayer (PauseMenu)   ← higher layer number = renders on top
-    Control (full rect)
-      PanelContainer (centered dialog)
+Main (Node3D or Node)
+├── World (Node3D)
+│   ├── Camera3D
+│   ├── DirectionalLight3D
+│   ├── Player (CharacterBody3D)
+│   └── Level (Node3D)
+├── HUD (CanvasLayer, layer = 1)
+│   └── Control (FULL_RECT)
+│       ├── HealthBar (ProgressBar, top-left)
+│       ├── ScoreLabel (Label, top-right)
+│       └── MinimapContainer (Control, bottom-right)
+├── PauseMenu (CanvasLayer, layer = 10)
+│   └── Panel (FULL_RECT, semi-transparent)
+│       └── CenterContainer
+│           └── VBoxContainer
+│               ├── Label ("Paused")
+│               ├── Button ("Resume")
+│               ├── Button ("Settings")
+│               └── Button ("Main Menu")
+└── LoadingScreen (CanvasLayer, layer = 100)
+    └── Panel (FULL_RECT, opaque)
+        └── CenterContainer
+            └── VBoxContainer
+                ├── Label ("Loading...")
+                └── ProgressBar
 ```
 
 ### Layer Ordering
 
-The `layer` property of `CanvasLayer` determines draw order. Higher numbers render on top of lower numbers. The default game canvas (where 2D nodes live) is at layer 0.
-
-Common conventions:
-- Layer 1: HUD (health, ammo, score, minimap)
-- Layer 2: Notifications, popups
-- Layer 5: Pause menu
-- Layer 10: Loading screen, transitions
-- Layer 100: Debug overlays
+The `layer` property controls draw order. Higher = renders on top:
+- `layer = 1` — HUD (always visible in gameplay)
+- `layer = 10` — Pause menu (on top of HUD)
+- `layer = 100` — Loading screen (on top of absolutely everything)
 
 ```gdscript
+# In HUD.gd
 extends CanvasLayer
 
 func _ready() -> void:
-    layer = 5  # This canvas renders on top of layer 1-4 canvases
-```
+    layer = 1
 
-### follow_viewport
-
-By default, `CanvasLayer` ignores the main viewport's camera transform. This is what you want for HUDs. But for world-space UI that should scroll with the camera (like name tags floating above NPC heads in a 2D game), set `follow_viewport = true`.
-
-```gdscript
-# World-space UI that follows the camera
+# In PauseMenu.gd
 extends CanvasLayer
 
 func _ready() -> void:
-    follow_viewport = true
-    follow_viewport_scale = 1.0  # Zoom factor relative to main viewport
+    layer = 10
+    visible = false  # Hidden until paused
+    process_mode = Node.PROCESS_MODE_ALWAYS  # Must work while game is paused
 ```
 
-### Showing and Hiding UI Layers
+### Process Mode for Pause Menus
+
+When the game is paused (`get_tree().paused = true`), nodes stop processing by default. The pause menu itself needs to keep working. Set its `process_mode` to `PROCESS_MODE_ALWAYS`:
 
 ```gdscript
-# HUD.gd
-extends CanvasLayer
-
-func show_hud() -> void:
-    visible = true
-
-func hide_hud() -> void:
-    visible = false
-
 # PauseMenu.gd
 extends CanvasLayer
 
 func _ready() -> void:
-    visible = false  # Start hidden
-
-func open_pause_menu() -> void:
-    visible = true
-    get_tree().paused = true
-    # Make sure UI still processes when paused
     process_mode = Node.PROCESS_MODE_ALWAYS
-    $ResumeButton.grab_focus()
-
-func close_pause_menu() -> void:
     visible = false
+
+func _unhandled_input(event: InputEvent) -> void:
+    if event.is_action_pressed("ui_cancel"):
+        if visible:
+            resume()
+        else:
+            pause()
+
+func pause() -> void:
+    get_tree().paused = true
+    visible = true
+    $Panel/CenterContainer/VBoxContainer/ResumeButton.grab_focus()
+
+func resume() -> void:
     get_tree().paused = false
-```
-
-### Process Mode and Pausing
-
-When you pause the tree with `get_tree().paused = true`, nodes with the default process mode stop processing. Your pause menu needs to keep working. Set it to `PROCESS_MODE_ALWAYS` so it processes even when the tree is paused.
-
-```gdscript
-# In your pause menu scene's root node
-func _ready() -> void:
-    process_mode = Node.PROCESS_MODE_ALWAYS
-    # Now _process, _input, etc. work even when game is paused
+    visible = false
 ```
 
 ---
 
-## 6. Focus & Gamepad Navigation
+## 5. Theme System
 
-### Why Focus Matters
+Styling individual nodes one by one leads to inconsistent UIs that are painful to update. The Theme system solves this: one Theme resource controls fonts, colors, and styleboxes for all Control nodes that inherit from it. Change the Theme; the entire UI updates.
 
-Mouse users click. Gamepad users navigate with d-pad or left stick. Keyboard users tab through inputs. Focus is what makes your UI work for all input types without writing separate code for each.
+### What a Theme Controls
 
-Every Control node has a **focus mode**. When a Control is focused, it receives keyboard/gamepad input and shows a visual focus indicator (the focus `StyleBox` from your Theme).
+A Theme stores style overrides organized by **type** (Button, Label, Panel, etc.) and **data type** (StyleBox, Color, Font, integer constant, icon):
 
-Focus modes:
-- `FOCUS_NONE` — never focuses (Labels, TextureRects)
-- `FOCUS_CLICK` — focuses when clicked (most interactive controls)
-- `FOCUS_ALL` — focuses on click OR tab navigation (recommended for gamepad support)
+| Data Type | Examples |
+|-----------|----------|
+| StyleBox | Button normal/hover/pressed/disabled/focus, Panel background |
+| Color | Button font_color, Label font_color, font_shadow_color |
+| Font | default_font, per-node font |
+| Integer | separation (VBox/HBox), margin (MarginContainer), icon_separation |
+| Texture | icons for CheckBox, OptionButton arrow, etc. |
+
+### Creating and Applying a Theme
+
+1. In the Inspector on any Control node, click the "Theme" property and create a new Theme resource.
+2. Save it as `res://ui/game_theme.tres`.
+3. Assign it to the **root** Control node (or a CanvasLayer's root Control). All children inherit it automatically.
+4. Override on individual nodes only when you need an exception.
+
+### Building a Theme in Code
 
 ```gdscript
-# Enable full focus for gamepad navigation
+# res://ui/theme_builder.gd
+static func create_game_theme() -> Theme:
+    var theme := Theme.new()
+
+    # Default font and size
+    var font := preload("res://fonts/my_font.tres")
+    theme.set_default_font(font)
+    theme.set_default_font_size(18)
+
+    # ---- Button styles ----
+
+    # Normal state
+    var btn_normal := StyleBoxFlat.new()
+    btn_normal.bg_color = Color(0.15, 0.15, 0.25, 0.92)
+    btn_normal.corner_radius_top_left = 8
+    btn_normal.corner_radius_top_right = 8
+    btn_normal.corner_radius_bottom_left = 8
+    btn_normal.corner_radius_bottom_right = 8
+    btn_normal.content_margin_left = 24
+    btn_normal.content_margin_right = 24
+    btn_normal.content_margin_top = 12
+    btn_normal.content_margin_bottom = 12
+    btn_normal.border_width_left = 2
+    btn_normal.border_width_right = 2
+    btn_normal.border_width_top = 2
+    btn_normal.border_width_bottom = 2
+    btn_normal.border_color = Color(0.4, 0.4, 0.7, 0.6)
+    theme.set_stylebox("normal", "Button", btn_normal)
+
+    # Hover state
+    var btn_hover := btn_normal.duplicate()
+    btn_hover.bg_color = Color(0.25, 0.25, 0.45, 0.95)
+    btn_hover.border_color = Color(0.6, 0.6, 1.0, 0.9)
+    theme.set_stylebox("hover", "Button", btn_hover)
+
+    # Pressed state
+    var btn_pressed := btn_normal.duplicate()
+    btn_pressed.bg_color = Color(0.1, 0.1, 0.2, 0.95)
+    btn_pressed.border_color = Color(0.8, 0.8, 1.0, 1.0)
+    theme.set_stylebox("pressed", "Button", btn_pressed)
+
+    # Disabled state
+    var btn_disabled := btn_normal.duplicate()
+    btn_disabled.bg_color = Color(0.08, 0.08, 0.12, 0.5)
+    btn_disabled.border_color = Color(0.2, 0.2, 0.3, 0.4)
+    theme.set_stylebox("disabled", "Button", btn_disabled)
+
+    # Focus state (for gamepad/keyboard navigation — style this prominently)
+    var btn_focus := StyleBoxFlat.new()
+    btn_focus.bg_color = Color(0, 0, 0, 0)  # transparent fill
+    btn_focus.corner_radius_top_left = 8
+    btn_focus.corner_radius_top_right = 8
+    btn_focus.corner_radius_bottom_left = 8
+    btn_focus.corner_radius_bottom_right = 8
+    btn_focus.border_width_left = 2
+    btn_focus.border_width_right = 2
+    btn_focus.border_width_top = 2
+    btn_focus.border_width_bottom = 2
+    btn_focus.border_color = Color.WHITE
+    theme.set_stylebox("focus", "Button", btn_focus)
+
+    # Button font colors
+    theme.set_color("font_color", "Button", Color.WHITE)
+    theme.set_color("font_hover_color", "Button", Color.WHITE)
+    theme.set_color("font_pressed_color", "Button", Color(0.8, 0.8, 1.0))
+    theme.set_color("font_disabled_color", "Button", Color(0.5, 0.5, 0.5))
+
+    # ---- Panel style ----
+    var panel_style := StyleBoxFlat.new()
+    panel_style.bg_color = Color(0.05, 0.05, 0.1, 0.88)
+    panel_style.corner_radius_top_left = 12
+    panel_style.corner_radius_top_right = 12
+    panel_style.corner_radius_bottom_left = 12
+    panel_style.corner_radius_bottom_right = 12
+    panel_style.border_width_left = 1
+    panel_style.border_width_right = 1
+    panel_style.border_width_top = 1
+    panel_style.border_width_bottom = 1
+    panel_style.border_color = Color(0.3, 0.3, 0.5, 0.5)
+    theme.set_stylebox("panel", "Panel", panel_style)
+
+    # ---- ProgressBar style ----
+    var pb_bg := StyleBoxFlat.new()
+    pb_bg.bg_color = Color(0.1, 0.1, 0.15, 0.8)
+    pb_bg.corner_radius_top_left = 4
+    pb_bg.corner_radius_top_right = 4
+    pb_bg.corner_radius_bottom_left = 4
+    pb_bg.corner_radius_bottom_right = 4
+    theme.set_stylebox("background", "ProgressBar", pb_bg)
+
+    var pb_fill := StyleBoxFlat.new()
+    pb_fill.bg_color = Color(0.2, 0.8, 0.3)
+    pb_fill.corner_radius_top_left = 4
+    pb_fill.corner_radius_top_right = 4
+    pb_fill.corner_radius_bottom_left = 4
+    pb_fill.corner_radius_bottom_right = 4
+    theme.set_stylebox("fill", "ProgressBar", pb_fill)
+
+    # VBoxContainer / HBoxContainer separation
+    theme.set_constant("separation", "VBoxContainer", 12)
+    theme.set_constant("separation", "HBoxContainer", 12)
+
+    return theme
+```
+
+### The Theme Editor
+
+For most workflows, the Inspector's Theme Editor is faster than code. Open any saved `.tres` Theme resource, and the editor shows a visual tree of all node types and their overridable properties. You can:
+- Preview changes live in the editor
+- Import styles from another Theme
+- Copy styleboxes between states (normal to hover, then tweak)
+
+Use code generation when you need the theme to be data-driven (e.g., loaded from a config file, or created at runtime based on user preferences).
+
+---
+
+## 6. Focus and Keyboard/Gamepad Navigation
+
+A UI that only works with a mouse is an incomplete UI. Every menu you build should be fully navigable with keyboard arrow keys, Tab/Shift-Tab, and gamepad d-pad. Godot's focus system makes this straightforward.
+
+### Focus Basics
+
+- **Focused node**: the Control that currently receives keyboard/gamepad input
+- `grab_focus()`: programmatically give focus to a node
+- `release_focus()`: remove focus
+- `has_focus()`: check if a node currently has focus
+- `focus_entered` signal: emitted when focus arrives
+- `focus_exited` signal: emitted when focus leaves
+
+### Setting Initial Focus
+
+When a menu appears, the first interactive element should grab focus immediately. Otherwise gamepad users see no selection and don't know where to start:
+
+```gdscript
+# MainMenu.gd
+extends CanvasLayer
+
+@onready var start_button: Button = $Panel/VBoxContainer/StartButton
+
 func _ready() -> void:
-    focus_mode = Control.FOCUS_ALL
+    start_button.grab_focus()
+
+func show_menu() -> void:
+    visible = true
+    start_button.grab_focus()
 ```
 
 ### Focus Neighbors
 
-Tell Godot which control to move focus to in each direction. Set **Focus Neighbor** properties in the Inspector (Left, Right, Top, Bottom) or in code:
+For complex layouts where the auto-navigation doesn't work correctly, set focus neighbors explicitly. Each Control has four neighbor properties that accept `NodePath` values:
 
 ```gdscript
-extends VBoxContainer
-
-@onready var play_btn: Button = $PlayButton
-@onready var settings_btn: Button = $SettingsButton
-@onready var quit_btn: Button = $QuitButton
-
-func _ready() -> void:
-    # Manual focus routing
-    play_btn.focus_neighbor_bottom = play_btn.get_path_to(settings_btn)
-    settings_btn.focus_neighbor_top = settings_btn.get_path_to(play_btn)
-    settings_btn.focus_neighbor_bottom = settings_btn.get_path_to(quit_btn)
-    quit_btn.focus_neighbor_top = quit_btn.get_path_to(settings_btn)
-
-    # Wrap around: bottom of last goes to top of first
-    quit_btn.focus_neighbor_bottom = quit_btn.get_path_to(play_btn)
-    play_btn.focus_neighbor_top = play_btn.get_path_to(quit_btn)
-
-    # Set initial focus when menu opens
-    play_btn.grab_focus()
+# In the editor: set focus_neighbor_* in the Inspector
+# In code:
+start_button.focus_neighbor_bottom = settings_button.get_path()
+settings_button.focus_neighbor_top = start_button.get_path()
+settings_button.focus_neighbor_bottom = quit_button.get_path()
+quit_button.focus_neighbor_top = settings_button.get_path()
+quit_button.focus_neighbor_bottom = start_button.get_path()  # Wrap around
+start_button.focus_neighbor_top = quit_button.get_path()      # Wrap around
 ```
 
-### Grabbing Focus
+VBoxContainer and HBoxContainer set focus neighbors automatically for their children — you only need to override when you have non-linear navigation (e.g., a button group that wraps, or cross-container navigation).
 
-Always call `grab_focus()` when showing a menu so gamepad users have a starting point:
-
-```gdscript
-# MainMenu.gd
-func _ready() -> void:
-    # Give focus to the first interactive element
-    $PlayButton.grab_focus()
-
-# PauseMenu.gd
-func open() -> void:
-    visible = true
-    await get_tree().process_frame  # Wait one frame for layout to settle
-    $ResumeButton.grab_focus()
-```
-
-### Focus Visual Feedback
-
-The `focus` StyleBox in your Theme defines what a focused button looks like. Without it, focused buttons get a default system outline that probably doesn't match your UI style.
-
-In the Theme editor, for Button → Style → focus, set a `StyleBoxFlat` with a bright border or colored background:
+### Handling ui_cancel (Back Button / Escape)
 
 ```gdscript
-# Programmatic focus style
-func make_focus_style() -> StyleBoxFlat:
-    var style: StyleBoxFlat = StyleBoxFlat.new()
-    style.bg_color = Color(0.0, 0.0, 0.0, 0.0)      # Transparent fill
-    style.border_width_left = 3
-    style.border_width_right = 3
-    style.border_width_top = 3
-    style.border_width_bottom = 3
-    style.border_color = Color(1.0, 0.85, 0.0, 1.0)  # Gold border
-    style.corner_radius_top_left = 6
-    style.corner_radius_top_right = 6
-    style.corner_radius_bottom_left = 6
-    style.corner_radius_bottom_right = 6
-    return style
-```
-
-### Handling UI Input Actions
-
-Define UI actions in **Project Settings → Input Map**:
-- `ui_accept` — confirm (Enter, A button)
-- `ui_cancel` — back/cancel (Escape, B button)
-- `ui_left/right/up/down` — navigation (Arrow keys, D-pad, left stick)
-
-These are built-in and work automatically with focused Controls. Buttons respond to `ui_accept` when focused. For custom behavior:
-
-```gdscript
-extends Control
-
-func _input(event: InputEvent) -> void:
+func _unhandled_input(event: InputEvent) -> void:
     if event.is_action_pressed("ui_cancel"):
-        if visible:
-            close_menu()
-            get_viewport().set_input_as_handled()
+        get_viewport().set_input_as_handled()
+        back()
+
+func back() -> void:
+    # Return to previous menu / close overlay
+    queue_free()
+```
+
+Always call `set_input_as_handled()` when you consume a UI event so it doesn't propagate to the game world.
+
+### Focus StyleBox
+
+The "focus" StyleBox on a Button is how focused buttons are visually distinguished for gamepad users. By default it's invisible — style it prominently:
+
+```gdscript
+# A bright white border that clearly shows which button is selected
+var focus_style := StyleBoxFlat.new()
+focus_style.bg_color = Color(0, 0, 0, 0)       # Transparent background
+focus_style.border_color = Color.WHITE
+focus_style.border_width_left = 3
+focus_style.border_width_right = 3
+focus_style.border_width_top = 3
+focus_style.border_width_bottom = 3
+focus_style.corner_radius_top_left = 8
+focus_style.corner_radius_top_right = 8
+focus_style.corner_radius_bottom_left = 8
+focus_style.corner_radius_bottom_right = 8
+theme.set_stylebox("focus", "Button", focus_style)
 ```
 
 ---
 
-## 7. RichTextLabel & BBCode
+## 7. RichTextLabel and BBCode
 
-### What RichTextLabel Is For
+`RichTextLabel` is `Label`'s powerful sibling. Enable `bbcode_enabled = true` and you get inline formatting, color, font sizing, images, and animated effects — all in a single text node.
 
-`RichTextLabel` displays text with inline formatting — bold, italic, colors, sizes, images, clickable links, custom effects. The plain `Label` node is for static text. Use `RichTextLabel` for dialogue boxes, item descriptions, log windows, tooltips, and anything with mixed formatting.
-
-Enable BBCode by checking `bbcode_enabled` in the Inspector or in code:
+### BBCode Reference
 
 ```gdscript
-extends RichTextLabel
+var rtl := $RichTextLabel
+rtl.bbcode_enabled = true
 
-func _ready() -> void:
-    bbcode_enabled = true
-
-    # autowrap is on by default in RichTextLabel
-    # For scrolling, put it inside a ScrollContainer or use the built-in scroll
-    scroll_following = true  # Auto-scroll to bottom as text is added
-```
-
-### BBCode Tags
-
-```gdscript
 # Basic formatting
-text = "[b]Bold text[/b]"
-text = "[i]Italic text[/i]"
-text = "[u]Underlined[/u]"
-text = "[s]Strikethrough[/s]"
-text = "[code]monospace code[/code]"
+rtl.text = "[b]Bold[/b]"
+rtl.text = "[i]Italic[/i]"
+rtl.text = "[u]Underline[/u]"
+rtl.text = "[s]Strikethrough[/s]"
 
 # Colors
-text = "[color=red]Red text[/color]"
-text = "[color=#ff6600]Orange hex[/color]"
-text = "[color=rgba(255,128,0,0.8)]Semi-transparent[/color]"
+rtl.text = "[color=red]Red text[/color]"
+rtl.text = "[color=#ff6644]Hex color[/color]"
 
 # Size
-text = "[font_size=32]Big text[/font_size]"
+rtl.text = "[font_size=32]Big Text[/font_size]"
 
-# Alignment (wraps entire paragraphs)
-text = "[center]Centered paragraph[/center]"
-text = "[right]Right-aligned[/right]"
-text = "[fill]Justified text[/fill]"
+# Alignment (wraps a paragraph)
+rtl.text = "[center]Centered heading[/center]"
+rtl.text = "[right]Right-aligned[/right]"
 
-# Horizontal rule
-text = "[hr]"
+# Images (displays a texture inline)
+rtl.text = "[img=32x32]res://icons/sword.png[/img]"
 
-# Lists
-text = "[ul]Bullet item\nAnother item[/ul]"
-text = "[ol]Numbered item\nAnother item[/ol]"
+# Clickable URLs (connect url_clicked signal)
+rtl.text = "[url=https://godotengine.org]Visit Godot[/url]"
 
-# URLs and clickable text
-text = "[url=https://godotengine.org]Visit Godot[/url]"
+# Tables
+rtl.text = "[table=2][cell]Name[/cell][cell]Value[/cell][cell]Sword[/cell][cell]50 dmg[/cell][/table]"
 
-# Inline images
-text = "[img]res://ui/icons/coin.png[/img]"
-text = "[img=32x32]res://ui/icons/coin.png[/img]"  # Scaled size
-
-# Named font (must exist in Theme)
-text = "[font=res://ui/fonts/heading.ttf][font_size=48]Title[/font_size][/font]"
+# Animated effects (built-in)
+rtl.text = "[wave]Wavy text[/wave]"
+rtl.text = "[shake]Shaking text[/shake]"
+rtl.text = "[rainbow]Rainbow text[/rainbow]"
+rtl.text = "[pulse color=#ff0000 freq=2.0]Pulsing[/pulse]"
+rtl.text = "[tornado radius=5.0 freq=2.0]Tornado[/tornado]"
 ```
 
-### The Push/Pop System (Code API)
+### Item Description Example
 
-Instead of building BBCode strings, you can use the push/pop API for cleaner code:
-
-```gdscript
-extends RichTextLabel
-
-func build_item_tooltip(item: ItemData) -> void:
-    clear()
-
-    push_bold()
-    add_text(item.name)
-    pop()  # end bold
-
-    add_newline()
-
-    push_color(item.rarity_color())
-    add_text("[%s]" % item.rarity_name())
-    pop()
-
-    add_newline()
-    add_newline()
-
-    push_italics()
-    add_text(item.description)
-    pop()
-
-    add_newline()
-    add_newline()
-
-    push_color(Color.YELLOW)
-    add_text("ATK: +%d" % item.attack_bonus)
-    pop()
-    add_newline()
-
-    push_color(Color.CYAN)
-    add_text("DEF: +%d" % item.defense_bonus)
-    pop()
-```
-
-### Custom Effects
-
-`RichTextEffect` lets you add custom animated effects to text — wave, tornado, color cycle, fade in letter by letter.
+A complete item description card using multiple BBCode styles:
 
 ```gdscript
-# WaveEffect.gd — makes text bob up and down
-extends RichTextEffect
+func set_item_description(item: ItemResource) -> void:
+    var rtl: RichTextLabel = $ItemPanel/Description
+    rtl.bbcode_enabled = true
 
-# Use in BBCode as: [wave amp=20 freq=2]Wavy text[/wave]
-var bbcode: String = "wave"
+    var rarity_colors := {
+        "common": "white",
+        "uncommon": "#00ff7f",
+        "rare": "#4488ff",
+        "epic": "#aa44ff",
+        "legendary": "#ff8800"
+    }
+    var color := rarity_colors.get(item.rarity, "white")
 
-func _process_custom_fx(char_fx: CharFXTransform) -> bool:
-    var amp: float = char_fx.env.get("amp", 10.0)
-    var freq: float = char_fx.env.get("freq", 2.0)
-    char_fx.offset.y = sin(char_fx.elapsed_time * freq * TAU + char_fx.range.x * 0.5) * amp
-    return true
-```
-
-Register the effect:
-
-```gdscript
-# In your RichTextLabel script
-func _ready() -> void:
-    bbcode_enabled = true
-    install_effect(WaveEffect.new())
-    install_effect(ShakeEffect.new())
-
-    text = "[wave amp=15 freq=3]This text waves![/wave]"
-```
-
-### Clickable Text with meta
-
-`[url=...]` tags emit the `meta_clicked` signal when clicked. Use this for clickable links in chat logs, help text, and item cross-references.
-
-```gdscript
-extends RichTextLabel
-
-func _ready() -> void:
-    bbcode_enabled = true
-    text = "Check out [url=item:sword_of_fire]Sword of Fire[/url] in the shop."
-
-    meta_clicked.connect(_on_meta_clicked)
-    meta_hover_started.connect(_on_meta_hover_started)
-    meta_hover_ended.connect(_on_meta_hover_ended)
-
-func _on_meta_clicked(meta: Variant) -> void:
-    var meta_str: String = str(meta)
-    if meta_str.begins_with("item:"):
-        var item_id: String = meta_str.substr(5)
-        show_item_details(item_id)
-    elif meta_str.begins_with("http"):
-        OS.shell_open(meta_str)
-
-func _on_meta_hover_started(meta: Variant) -> void:
-    # Show tooltip
-    pass
-
-func _on_meta_hover_ended(meta: Variant) -> void:
-    # Hide tooltip
-    pass
+    rtl.text = (
+        "[font_size=22][b]%s[/b][/font_size]\n" % item.name
+        + "[color=%s][i]%s[/i][/color]\n\n" % [color, item.rarity.capitalize()]
+        + "[color=gray]Damage:[/color] [color=red]%d[/color]\n" % item.damage
+        + "[color=gray]Speed:[/color] [color=yellow]%.1f[/color]\n\n" % item.attack_speed
+        + "[i]%s[/i]" % item.lore_text
+    )
 ```
 
 ### Typewriter Effect
 
-Animating text appearing letter by letter is a classic dialogue effect:
+The `visible_characters` property controls how many characters are rendered. Animate it with a Tween for a typewriter effect:
 
 ```gdscript
-extends RichTextLabel
+var _typewriter_tween: Tween
 
-var full_text: String = ""
-var visible_ratio_tween: Tween = null
+func type_text(rtl: RichTextLabel, full_text: String, chars_per_sec: float = 30.0) -> void:
+    rtl.text = full_text
+    rtl.visible_characters = 0
+    rtl.visible_ratio = 0.0  # Equivalent but 0.0-1.0 range
 
-func display_dialogue(dialogue: String, chars_per_second: float = 30.0) -> void:
-    bbcode_enabled = true
-    text = dialogue
-    # Start at 0 visible characters
-    visible_ratio = 0.0
+    if _typewriter_tween:
+        _typewriter_tween.kill()
 
-    # Tween visible_ratio from 0 to 1
-    if visible_ratio_tween:
-        visible_ratio_tween.kill()
-    visible_ratio_tween = create_tween()
-
-    var duration: float = float(get_total_character_count()) / chars_per_second
-    visible_ratio_tween.tween_property(self, "visible_ratio", 1.0, duration)
-    await visible_ratio_tween.finished
+    _typewriter_tween = create_tween()
+    var duration := full_text.length() / chars_per_sec
+    _typewriter_tween.tween_property(rtl, "visible_characters", full_text.length(), duration)
+    await _typewriter_tween.finished
 
 func skip_typewriter() -> void:
-    if visible_ratio_tween and visible_ratio_tween.is_running():
-        visible_ratio_tween.kill()
-        visible_ratio = 1.0
+    if _typewriter_tween and _typewriter_tween.is_running():
+        _typewriter_tween.kill()
+        $DialogueBox/Text.visible_ratio = 1.0
 ```
+
+Connect a button or `ui_accept` action to `skip_typewriter()` so players can skip ahead during dialogue.
 
 ---
 
 ## 8. SubViewport for Minimap
 
-### How SubViewport Works
+A minimap requires rendering the world from a top-down perspective and displaying that render in a small corner of the HUD. SubViewport makes this possible: it renders a separate camera's view to a texture, and you display that texture in a TextureRect.
 
-`SubViewport` renders its children into a texture that you can display anywhere in the UI. The process:
-
-1. Create a `SubViewport` node
-2. Put a `Camera2D` (or `Camera3D`) and the things you want to render inside it
-3. Reference the viewport's texture: `sub_viewport.get_texture()`
-4. Display that texture in a `TextureRect` in your HUD
-
-### Minimap Scene Structure
+### Scene Structure
 
 ```
-# The SubViewport setup (can be its own scene or inside HUD)
-SubViewport (minimap_viewport)    ← renders the minimap
-  Camera2D (minimap_camera)
-  # OR: for a top-down 3D minimap:
-  Camera3D (minimap_camera_3d)    ← orthographic, looking down
-
-# The HUD where minimap displays
-CanvasLayer (HUD)
-  Control
-    PanelContainer (minimap_container, bottom-right corner)
-      SubViewportContainer
-        SubViewport                 ← same SubViewport as above
-      ColorRect (minimap_border)   ← overlay border effect
+MinimapSystem (Node3D)
+├── SubViewport
+│   ├── Camera3D (MinimapCamera, orthographic, looking straight down)
+│   └── MinimapMarkers (Node3D — for icons/dots on the minimap)
 ```
 
-Wait — `SubViewportContainer` is the better way. It handles the `SubViewport` internally and renders it directly. You don't need to manually fetch the texture.
-
-### Using SubViewportContainer
-
+And in the HUD:
 ```
-# Scene tree for minimap HUD element:
-MarginContainer (anchored bottom-right)
-  VBoxContainer
-    Label ("MAP")
-    SubViewportContainer (128x128, stretch = true)
-      SubViewport (128x128)
-        Camera2D (MinimapCamera)
+HUD (CanvasLayer)
+└── Control (FULL_RECT)
+    └── MinimapContainer (Control, PRESET_BOTTOM_RIGHT)
+        ├── Panel (background + border)
+        └── TextureRect (MinimapView, PRESET_FULL_RECT)
 ```
+
+### Wiring It Together
 
 ```gdscript
-# Minimap.gd — attaches to the SubViewportContainer or a parent node
-extends Control
+# MinimapSystem.gd
+extends Node3D
 
-@onready var minimap_camera: Camera2D = $SubViewportContainer/SubViewport/MinimapCamera
-@export var player: CharacterBody2D  # Or Node3D for 3D game
+@export var player: CharacterBody3D
+@onready var minimap_camera: Camera3D = $SubViewport/Camera3D
+@onready var sub_viewport: SubViewport = $SubViewport
 
-@export var zoom_level: float = 0.1   # How zoomed out the minimap is
+const MINIMAP_HEIGHT := 80.0   # Height above ground
+const MINIMAP_RANGE  := 60.0   # Orthogonal half-size (zoom level)
 
 func _ready() -> void:
-    minimap_camera.zoom = Vector2(zoom_level, zoom_level)
+    sub_viewport.size = Vector2i(256, 256)
+    sub_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+    sub_viewport.transparent_bg = false
 
-func _process(_delta: float) -> void:
-    if player:
-        # Keep minimap camera centered on player
-        minimap_camera.global_position = player.global_position
-```
+    minimap_camera.projection = Camera3D.PROJECTION_ORTHOGONAL
+    minimap_camera.size = MINIMAP_RANGE
+    minimap_camera.rotation_degrees = Vector3(-90, 0, 0)
 
-### Top-Down 3D Minimap
-
-For a 3D game, use a `Camera3D` in the `SubViewport` with orthographic projection looking straight down:
-
-```gdscript
-# MinimapCamera3D.gd
-extends Camera3D
-
-@export var target: Node3D
-@export var height: float = 100.0
-@export var map_size: float = 50.0   # How many world units visible
-
-func _ready() -> void:
-    # Orthographic projection for accurate top-down map
-    projection = Camera3D.PROJECTION_ORTHOGONAL
-    size = map_size
-    # Look straight down
-    rotation_degrees = Vector3(-90.0, 0.0, 0.0)
-
-func _process(_delta: float) -> void:
-    if target:
-        global_position = Vector3(target.global_position.x, height, target.global_position.z)
-```
-
-### Render Layers for Minimap
-
-You don't want EVERYTHING in the game world appearing on the minimap — just terrain, walls, key landmarks, and the player icon. Use `VisualInstance3D.layers` (a bitmask) to control what each camera sees.
-
-```gdscript
-# In Project Settings → Render → Layers → 3D Render, name layer 2 "Minimap"
-
-# Terrain — visible on main camera AND minimap
-terrain_mesh.layers = 0b11  # bits 0 and 1 = layers 1 and 2
-
-# Detailed props — only main camera, not minimap
-rock_mesh.layers = 0b01     # only layer 1
-
-# Minimap icons (arrows, dots for enemies)
-minimap_icon.layers = 0b10  # only layer 2
-
-# Configure cameras
-main_camera.cull_mask = 0b01        # Sees layer 1 only
-minimap_camera.cull_mask = 0b10     # Sees layer 2 only
-```
-
-### Player Dot on Minimap
-
-For a 2D minimap, draw a dot or arrow representing the player's position:
-
-```gdscript
-# MinimapDot.gd — a ColorRect or TextureRect that follows the player
-extends Control
-
-@export var player: Node3D
-@export var map_center: Vector2 = Vector2(64.0, 64.0)  # Center of 128x128 minimap
-@export var world_to_minimap_scale: float = 0.5         # world units per pixel
+    # Connect the viewport texture to the HUD's TextureRect
+    var hud_minimap: TextureRect = get_tree().get_first_node_in_group("minimap_view")
+    if hud_minimap:
+        hud_minimap.texture = sub_viewport.get_texture()
 
 func _process(_delta: float) -> void:
     if not player:
         return
-    var world_pos: Vector3 = player.global_position
-    # Convert world XZ to minimap UV
-    var minimap_pos: Vector2 = Vector2(world_pos.x, world_pos.z) * world_to_minimap_scale
-    position = map_center + minimap_pos - size * 0.5
-
-    # Rotate dot to match player facing direction
-    rotation = -player.rotation.y  # Y rotation in 3D → rotation in 2D
+    minimap_camera.global_position = Vector3(
+        player.global_position.x,
+        player.global_position.y + MINIMAP_HEIGHT,
+        player.global_position.z
+    )
 ```
-
-### SubViewport Performance Tips
-
-SubViewports render every frame by default. For a minimap that doesn't need to update constantly:
 
 ```gdscript
-# Update minimap at 15 FPS instead of 60
-func _ready() -> void:
-    var sub_vp: SubViewport = $SubViewportContainer/SubViewport
-    sub_vp.render_target_update_mode = SubViewport.UPDATE_WHEN_VISIBLE
-    # Or for manual control:
-    sub_vp.render_target_update_mode = SubViewport.UPDATE_DISABLED
+# HUD.gd — receive the texture
+extends CanvasLayer
 
-    # Manual update timer
-    var timer: Timer = Timer.new()
-    timer.wait_time = 1.0 / 15.0  # 15 FPS
-    timer.autostart = true
-    timer.timeout.connect(func() -> void:
-        sub_vp.render_target_update_mode = SubViewport.UPDATE_ONCE
-    )
-    add_child(timer)
+@onready var minimap_view: TextureRect = $Control/MinimapContainer/Panel/TextureRect
+
+func _ready() -> void:
+    minimap_view.add_to_group("minimap_view")
+    minimap_view.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 ```
+
+### SubViewport Settings Reference
+
+| Property | Value | Reason |
+|----------|-------|--------|
+| `size` | `Vector2i(256, 256)` | Resolution of the minimap render |
+| `render_target_update_mode` | `UPDATE_ALWAYS` | Re-render every frame |
+| `transparent_bg` | `false` | Opaque background for the minimap |
+| `own_world_3d` | `false` | Uses the main world (sees the same geometry) |
+| `use_hdr_2d` | `false` | Standard SDR rendering is fine for minimaps |
+
+For a static map (dungeon, fixed level), consider `UPDATE_ONCE` or `UPDATE_WHEN_VISIBLE` to save GPU time.
 
 ---
 
-## 9. Loading Screens & Scene Transitions
+## 9. Loading Screen with Progress
 
-### The Problem with change_scene_to_file
+Never call `load()` during gameplay. It blocks the main thread and freezes the game while the OS loads the file from disk. Use `ResourceLoader.load_threaded_request()` instead: it loads in the background while your loading screen animates.
 
-`get_tree().change_scene_to_file("res://scenes/big_level.tscn")` blocks the main thread while loading. For small scenes, this is fine — instant. For large levels with many assets, it freezes the game for a noticeable moment. The player sees a stutter or a black flash.
+### The Loading Screen Scene
 
-The solution is `ResourceLoader.load_threaded_request()` — async loading that happens in a background thread while your loading screen plays an animation or progress bar.
+```
+LoadingScreen (CanvasLayer, layer = 100)
+└── Panel (FULL_RECT, opaque black)
+    └── CenterContainer (FULL_RECT)
+        └── VBoxContainer
+            ├── Label (title_label, "Loading...")
+            ├── ProgressBar (progress_bar, min=0, max=100)
+            └── Label (status_label, "")
+```
 
-### Async Loading Flow
+### Complete Loading Screen Script
 
 ```gdscript
-# SceneManager.gd — autoload singleton
-extends Node
+# LoadingScreen.gd
+extends CanvasLayer
 
-signal load_progress_changed(progress: float)
-signal scene_loaded
+signal load_complete
 
-var _next_scene_path: String = ""
-var _loading: bool = false
+@onready var progress_bar: ProgressBar = $Panel/CenterContainer/VBoxContainer/ProgressBar
+@onready var status_label: Label = $Panel/CenterContainer/VBoxContainer/StatusLabel
+@onready var title_label: Label = $Panel/CenterContainer/VBoxContainer/TitleLabel
 
-func change_scene(path: String) -> void:
-    if _loading:
+var _scene_path: String = ""
+var _processing_load: bool = false
+
+func _ready() -> void:
+    layer = 100
+    visible = false
+    progress_bar.min_value = 0.0
+    progress_bar.max_value = 100.0
+
+func load_scene(path: String, loading_text: String = "Loading...") -> void:
+    _scene_path = path
+    _processing_load = true
+    title_label.text = loading_text
+    status_label.text = ""
+    progress_bar.value = 0.0
+    visible = true
+
+    var err := ResourceLoader.load_threaded_request(path)
+    if err != OK:
+        status_label.text = "Error: could not start loading."
+        _processing_load = false
         return
-    _loading = true
-    _next_scene_path = path
-
-    # Show loading screen FIRST
-    # (LoadingScreen is a separate CanvasLayer autoload or we call it here)
-    LoadingScreen.show_loading()
-
-    # Request async load
-    ResourceLoader.load_threaded_request(path)
-
-    # Poll in _process
-    set_process(true)
 
 func _process(_delta: float) -> void:
-    if not _loading:
+    if not _processing_load:
         return
 
     var progress: Array = []
-    var status: ResourceLoader.ThreadLoadStatus = ResourceLoader.load_threaded_get_status(_next_scene_path, progress)
+    var status := ResourceLoader.load_threaded_get_status(_scene_path, progress)
 
     match status:
         ResourceLoader.THREAD_LOAD_IN_PROGRESS:
-            var pct: float = progress[0] if progress.size() > 0 else 0.0
-            emit_signal("load_progress_changed", pct)
-            LoadingScreen.set_progress(pct)
+            var pct: float = progress[0] * 100.0
+            progress_bar.value = pct
+            status_label.text = "%d%%" % int(pct)
 
         ResourceLoader.THREAD_LOAD_LOADED:
-            set_process(false)
-            _loading = false
-            var packed_scene: PackedScene = ResourceLoader.load_threaded_get(_next_scene_path)
-            LoadingScreen.hide_loading()
+            progress_bar.value = 100.0
+            status_label.text = "100%"
+            _processing_load = false
+
+            var packed_scene := ResourceLoader.load_threaded_get(_scene_path) as PackedScene
+            _scene_path = ""
+            load_complete.emit()
+            # Small delay so the 100% state is visible
+            await get_tree().create_timer(0.1).timeout
             get_tree().change_scene_to_packed(packed_scene)
+            visible = false
 
         ResourceLoader.THREAD_LOAD_FAILED:
-            set_process(false)
-            _loading = false
-            push_error("Failed to load scene: " + _next_scene_path)
-            LoadingScreen.hide_loading()
+            status_label.text = "Load failed!"
+            push_error("LoadingScreen: failed to load %s" % _scene_path)
+            _processing_load = false
+            _scene_path = ""
 ```
 
-### Loading Screen Scene
+### Using the Loading Screen
 
 ```gdscript
-# LoadingScreen.gd — CanvasLayer autoload, layer = 10
-extends CanvasLayer
-
-@onready var progress_bar: ProgressBar = $Control/CenterContainer/VBox/ProgressBar
-@onready var status_label: Label = $Control/CenterContainer/VBox/StatusLabel
-@onready var anim: AnimationPlayer = $AnimationPlayer
-@onready var background: ColorRect = $Control/Background
-
-var _target_progress: float = 0.0
-
-func _ready() -> void:
-    visible = false
-    layer = 10
-
-func show_loading(tip: String = "") -> void:
-    visible = true
-    progress_bar.value = 0.0
-    _target_progress = 0.0
-    status_label.text = "Loading..." if tip.is_empty() else tip
-    anim.play("fade_in")
-
-func hide_loading() -> void:
-    anim.play("fade_out")
-    await anim.animation_finished
-    visible = false
-
-func set_progress(pct: float) -> void:
-    # Target value — lerp in _process for smooth bar
-    _target_progress = pct * 100.0
-
-func _process(delta: float) -> void:
-    if not visible:
-        return
-    # Smooth progress bar — don't jump instantly
-    progress_bar.value = lerpf(progress_bar.value, _target_progress, delta * 5.0)
-
-    # Update label
-    var pct_int: int = int(progress_bar.value)
-    status_label.text = "Loading... %d%%" % pct_int
+# From any script:
+func go_to_game() -> void:
+    var loading_screen: CanvasLayer = preload("res://ui/loading_screen.tscn").instantiate()
+    get_tree().root.add_child(loading_screen)
+    loading_screen.load_scene("res://levels/level_01.tscn", "Loading Level 1...")
 ```
 
-### Minimum Loading Time
-
-Sometimes loading finishes so fast the loading screen flashes. Add a minimum display time:
-
-```gdscript
-# In SceneManager.gd
-const MIN_LOADING_DISPLAY_TIME: float = 0.5  # seconds
-
-var _load_start_time: float = 0.0
-
-func change_scene(path: String) -> void:
-    _load_start_time = Time.get_ticks_msec() / 1000.0
-    # ... rest of the loading code
-
-# In the THREAD_LOAD_LOADED case:
-ResourceLoader.THREAD_LOAD_LOADED:
-    var elapsed: float = Time.get_ticks_msec() / 1000.0 - _load_start_time
-    var remaining: float = max(0.0, MIN_LOADING_DISPLAY_TIME - elapsed)
-
-    if remaining > 0.0:
-        await get_tree().create_timer(remaining).timeout
-
-    # Now transition
-    var packed_scene: PackedScene = ResourceLoader.load_threaded_get(_next_scene_path)
-    LoadingScreen.hide_loading()
-    get_tree().change_scene_to_packed(packed_scene)
-```
-
-### Transition Animations
-
-For scene transitions that don't need a full loading screen — just a quick fade or wipe — use an AnimationPlayer on a CanvasLayer with a ColorRect:
-
-```gdscript
-# TransitionOverlay.gd — CanvasLayer autoload, layer = 9
-extends CanvasLayer
-
-@onready var overlay: ColorRect = $ColorRect
-@onready var anim: AnimationPlayer = $AnimationPlayer
-
-func _ready() -> void:
-    layer = 9
-    overlay.modulate.a = 0.0
-    # "fade_out" animation: ColorRect alpha 0→1 over 0.3s
-    # "fade_in" animation: ColorRect alpha 1→0 over 0.3s
-
-func transition_to(path: String) -> void:
-    anim.play("fade_out")           # Screen goes black
-    await anim.animation_finished
-    get_tree().change_scene_to_file(path)
-    await get_tree().process_frame  # Wait for new scene to load
-    anim.play("fade_in")            # Fade back in
-    await anim.animation_finished
-```
+Because the LoadingScreen is added directly to the scene tree root, it survives scene transitions automatically. Remove it after `load_complete` fires, or let it self-manage by staying hidden.
 
 ---
 
-## 10. Building the Complete Game UI
+## 10. In-World UI: Sprite3D and Label3D
 
-This section walks through the full mini-project: main menu, HUD, pause menu, minimap, and loading screen, all wired together.
+Not all UI is a flat overlay. Sometimes you need text and images that exist inside the 3D world — player name tags, damage numbers, quest markers, item pickups, in-game computer screens.
 
-### Scene Structure Overview
+### Label3D
+
+`Label3D` renders text directly in 3D space. It supports the same font properties as `Label` but lives at a `Vector3` position with a `Vector3` rotation.
+
+Key properties:
+- `text`: the string to display
+- `font_size`: size in 3D units
+- `modulate`: tint/alpha
+- `billboard`: face the camera automatically
+  - `BaseMaterial3D.BILLBOARD_DISABLED` (default): oriented like any 3D object
+  - `BaseMaterial3D.BILLBOARD_ENABLED`: always faces the camera (good for name tags)
+  - `BaseMaterial3D.BILLBOARD_FIXED_Y`: only rotates on Y axis (billboard but stays upright)
+- `no_depth_test`: when `true`, renders on top of all geometry (no z-fighting)
+- `alpha_cut`: `ALPHA_CUT_DISABLED`, `ALPHA_CUT_DISCARD`, `ALPHA_CUT_OPAQUE_PREPASS`
+
+### Sprite3D
+
+`Sprite3D` puts a `Texture2D` into 3D space. Useful for:
+- Map markers and pings
+- Quest indicators and exclamation marks
+- Item pickups before the player collects them
+- Animated 2D characters in a 3D world (pixel art, flat-shaded)
+
+Same `billboard` options as `Label3D`.
+
+### Floating Damage Numbers
+
+The classic VFX that every action game uses: a number pops up, floats upward, and fades out:
+
+```gdscript
+# DamageNumbers.gd — attach to a Node3D in your scene
+extends Node3D
+
+const FLOAT_HEIGHT := 2.0
+const FLOAT_DURATION := 0.8
+const FONT_SIZE := 48
+
+func spawn(world_position: Vector3, amount: int, is_crit: bool = false) -> void:
+    var label := Label3D.new()
+    label.text = ("★ " if is_crit else "") + str(amount)
+    label.font_size = FONT_SIZE * (1.5 if is_crit else 1.0)
+    label.modulate = Color.RED if not is_crit else Color.YELLOW
+    label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+    label.no_depth_test = true
+    label.global_position = world_position + Vector3(
+        randf_range(-0.3, 0.3),  # Slight horizontal scatter
+        1.0,
+        randf_range(-0.3, 0.3)
+    )
+    add_child(label)
+
+    var tween := create_tween()
+    tween.set_parallel(true)
+    tween.tween_property(label, "position:y", label.position.y + FLOAT_HEIGHT, FLOAT_DURATION)\
+         .set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+    tween.tween_property(label, "modulate:a", 0.0, FLOAT_DURATION)\
+         .set_delay(FLOAT_DURATION * 0.4)
+    tween.set_parallel(false)
+    tween.tween_callback(label.queue_free)
+```
+
+### In-World Control UI on a 3D Surface
+
+For proper 2D UI on a 3D mesh (a computer terminal in the level, a control panel, a shop sign), use a `SubViewport` as the mesh's texture:
 
 ```
-res://
-  ui/
-    MainMenu.tscn
-    HUD.tscn
-    PauseMenu.tscn
-    Minimap.tscn
-    LoadingScreen.tscn (autoload)
-    TransitionOverlay.tscn (autoload)
-    SceneManager.gd (autoload)
-    game_theme.tres
-  scenes/
-    Main.tscn (game world)
+TerminalProp (Node3D)
+├── MeshInstance3D (monitor screen mesh)
+└── SubViewport (render_target_update_mode = UPDATE_ALWAYS)
+    └── Control (FULL_RECT)
+        └── Panel
+            └── VBoxContainer
+                ├── Label ("SYSTEM ONLINE")
+                └── Button ("Access Files")
 ```
 
-Autoloads registered in **Project Settings → Autoload**:
-- `SceneManager` → `res://ui/SceneManager.gd`
-- `LoadingScreen` → `res://ui/LoadingScreen.tscn`
-- `TransitionOverlay` → `res://ui/TransitionOverlay.tscn`
+In the MeshInstance3D material, set the albedo texture to the `SubViewport`'s `ViewportTexture`. The buttons become interactive in 3D space — combine with a raycast from the player to send input events to the SubViewport using `push_input()`.
+
+---
+
+## 11. Code Walkthrough: Complete Game UI Kit
+
+This section builds every component of a real game's UI. Read through the full scene trees and scripts to understand how everything connects.
 
 ### Main Menu
 
+**Scene tree:**
+```
+MainMenu (CanvasLayer, layer = 1)
+└── Panel (FULL_RECT, semi-opaque dark background)
+    └── MarginContainer (FULL_RECT, margin 80px all sides)
+        └── VBoxContainer
+            ├── Label ("MY GAME", font_size=72, center aligned)
+            ├── Control (spacer, EXPAND+FILL)
+            ├── VBoxContainer (button_container)
+            │   ├── Button (StartButton, "Start Game")
+            │   ├── Button (SettingsButton, "Settings")
+            │   ├── Button (CreditsButton, "Credits")
+            │   └── Button (QuitButton, "Quit")
+            └── Label (version_label, "v1.0.0", right aligned)
+```
+
 ```gdscript
 # MainMenu.gd
-extends Control
+extends CanvasLayer
 
-@onready var play_btn: Button = %PlayButton
-@onready var settings_btn: Button = %SettingsButton
-@onready var quit_btn: Button = %QuitButton
-@onready var settings_panel: Control = %SettingsPanel
-@onready var main_panel: Control = %MainPanel
-@onready var anim: AnimationPlayer = $AnimationPlayer
-@onready var version_label: Label = %VersionLabel
+signal start_game_pressed
+signal settings_pressed
+signal credits_pressed
+
+@onready var start_button: Button = $Panel/MarginContainer/VBoxContainer/VBoxContainer/StartButton
+@onready var settings_button: Button = $Panel/MarginContainer/VBoxContainer/VBoxContainer/SettingsButton
+@onready var credits_button: Button = $Panel/MarginContainer/VBoxContainer/VBoxContainer/CreditsButton
+@onready var quit_button: Button = $Panel/MarginContainer/VBoxContainer/VBoxContainer/QuitButton
 
 func _ready() -> void:
-    version_label.text = "v" + ProjectSettings.get_setting("application/config/version", "0.1")
+    start_button.pressed.connect(func(): start_game_pressed.emit())
+    settings_button.pressed.connect(func(): settings_pressed.emit())
+    credits_button.pressed.connect(func(): credits_pressed.emit())
+    quit_button.pressed.connect(func(): get_tree().quit())
 
-    play_btn.pressed.connect(_on_play_pressed)
-    settings_btn.pressed.connect(_on_settings_pressed)
-    quit_btn.pressed.connect(_on_quit_pressed)
+    # Set up focus wrapping for keyboard/gamepad users
+    start_button.focus_neighbor_top = quit_button.get_path()
+    quit_button.focus_neighbor_bottom = start_button.get_path()
+
+    # Grab initial focus
+    start_button.grab_focus()
 
     # Animate in
-    anim.play("menu_appear")
-    await anim.animation_finished
-    play_btn.grab_focus()
-
-func _on_play_pressed() -> void:
-    anim.play("menu_disappear")
-    await anim.animation_finished
-    SceneManager.change_scene("res://scenes/main.tscn")
-
-func _on_settings_pressed() -> void:
-    anim.play("to_settings")
-    await anim.animation_finished
-    settings_panel.grab_focus_first_child()
-
-func _on_quit_pressed() -> void:
-    anim.play("menu_disappear")
-    await anim.animation_finished
-    get_tree().quit()
-
-func _on_settings_back_pressed() -> void:
-    anim.play_backwards("to_settings")
-    await anim.animation_finished
-    settings_btn.grab_focus()
-
-func _input(event: InputEvent) -> void:
-    if event.is_action_pressed("ui_cancel") and settings_panel.visible:
-        _on_settings_back_pressed()
-        get_viewport().set_input_as_handled()
+    modulate.a = 0.0
+    var tween := create_tween()
+    tween.tween_property(self, "modulate:a", 1.0, 0.4)
 ```
 
-Settings panel wires to `AudioServer` bus volumes and `DisplayServer` window mode:
+### Settings Menu
 
 ```gdscript
-# SettingsPanel.gd
-extends Control
+# SettingsMenu.gd
+extends CanvasLayer
 
-@onready var master_slider: HSlider = %MasterVolume
-@onready var music_slider: HSlider = %MusicVolume
-@onready var sfx_slider: HSlider = %SFXVolume
-@onready var fullscreen_check: CheckButton = %FullscreenToggle
+@onready var master_slider: HSlider = $Panel/VBoxContainer/MasterVolume/HSlider
+@onready var music_slider: HSlider = $Panel/VBoxContainer/MusicVolume/HSlider
+@onready var sfx_slider: HSlider = $Panel/VBoxContainer/SFXVolume/HSlider
+@onready var fullscreen_check: CheckButton = $Panel/VBoxContainer/Fullscreen/CheckButton
+@onready var back_button: Button = $Panel/VBoxContainer/BackButton
+
+const SETTINGS_FILE := "user://settings.cfg"
+var _config := ConfigFile.new()
 
 func _ready() -> void:
-    # Load saved settings
-    master_slider.value = db_to_linear(AudioServer.get_bus_volume_db(0))
-    music_slider.value = db_to_linear(AudioServer.get_bus_volume_db(AudioServer.get_bus_index("Music")))
-    sfx_slider.value = db_to_linear(AudioServer.get_bus_volume_db(AudioServer.get_bus_index("SFX")))
-    fullscreen_check.button_pressed = DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN
+    _load_settings()
 
-    master_slider.value_changed.connect(func(val: float) -> void:
-        AudioServer.set_bus_volume_db(0, linear_to_db(val))
-    )
-    fullscreen_check.toggled.connect(func(on: bool) -> void:
-        if on:
-            DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
-        else:
-            DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
-    )
+    master_slider.value_changed.connect(_on_master_volume_changed)
+    music_slider.value_changed.connect(_on_music_volume_changed)
+    sfx_slider.value_changed.connect(_on_sfx_volume_changed)
+    fullscreen_check.toggled.connect(_on_fullscreen_toggled)
+    back_button.pressed.connect(_on_back_pressed)
 
-func grab_focus_first_child() -> void:
-    master_slider.grab_focus()
+    back_button.grab_focus()
+
+func _on_master_volume_changed(value: float) -> void:
+    # AudioServer uses decibels: linear_to_db converts 0.0-1.0 to dB
+    AudioServer.set_bus_volume_db(
+        AudioServer.get_bus_index("Master"),
+        linear_to_db(value)
+    )
+    _config.set_value("audio", "master", value)
+    _config.save(SETTINGS_FILE)
+
+func _on_music_volume_changed(value: float) -> void:
+    AudioServer.set_bus_volume_db(
+        AudioServer.get_bus_index("Music"),
+        linear_to_db(value)
+    )
+    _config.set_value("audio", "music", value)
+    _config.save(SETTINGS_FILE)
+
+func _on_sfx_volume_changed(value: float) -> void:
+    AudioServer.set_bus_volume_db(
+        AudioServer.get_bus_index("SFX"),
+        linear_to_db(value)
+    )
+    _config.set_value("audio", "sfx", value)
+    _config.save(SETTINGS_FILE)
+
+func _on_fullscreen_toggled(pressed: bool) -> void:
+    if pressed:
+        DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN)
+    else:
+        DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+    _config.set_value("display", "fullscreen", pressed)
+    _config.save(SETTINGS_FILE)
+
+func _on_back_pressed() -> void:
+    visible = false
+
+func _load_settings() -> void:
+    if _config.load(SETTINGS_FILE) != OK:
+        return  # No saved settings yet — use defaults
+
+    master_slider.value = _config.get_value("audio", "master", 1.0)
+    music_slider.value = _config.get_value("audio", "music", 0.8)
+    sfx_slider.value = _config.get_value("audio", "sfx", 1.0)
+    fullscreen_check.button_pressed = _config.get_value("display", "fullscreen", false)
 ```
 
-### HUD
+### In-Game HUD
 
 ```gdscript
 # HUD.gd
 extends CanvasLayer
 
-@onready var health_bar: ProgressBar = %HealthBar
-@onready var ammo_label: Label = %AmmoLabel
-@onready var score_label: Label = %ScoreLabel
-@onready var minimap: Control = %Minimap
-@onready var crosshair: TextureRect = %Crosshair
-@onready var ability_cooldown: TextureRect = %AbilityCooldown
-@onready var low_health_vignette: ColorRect = %LowHealthVignette
+@onready var health_bar: ProgressBar = $Control/HealthBar
+@onready var health_label: Label = $Control/HealthBar/Label
+@onready var score_label: Label = $Control/ScoreLabel
+@onready var ammo_label: Label = $Control/AmmoLabel
+@onready var minimap_view: TextureRect = $Control/MinimapContainer/TextureRect
 
 func _ready() -> void:
     layer = 1
-    # Connect to game signals via autoload or direct reference
-    GameEvents.player_health_changed.connect(_on_health_changed)
-    GameEvents.player_ammo_changed.connect(_on_ammo_changed)
-    GameEvents.score_changed.connect(_on_score_changed)
 
-    low_health_vignette.modulate.a = 0.0
-
-func _on_health_changed(current: float, maximum: float) -> void:
+func set_health(current: int, maximum: int) -> void:
     health_bar.max_value = maximum
-    var tween: Tween = create_tween()
-    tween.tween_property(health_bar, "value", current, 0.25).set_ease(Tween.EASE_OUT)
+    health_bar.value = current
+    health_label.text = "%d / %d" % [current, maximum]
 
-    # Low health warning
-    var health_pct: float = current / maximum
-    var target_alpha: float = remap(health_pct, 0.0, 0.3, 0.6, 0.0)
-    target_alpha = clampf(target_alpha, 0.0, 0.6)
-    var vignette_tween: Tween = create_tween()
-    vignette_tween.tween_property(low_health_vignette, "modulate:a", target_alpha, 0.3)
+    # Color shift: green to yellow to red based on health %
+    var pct := float(current) / float(maximum)
+    var fill_color: Color
+    if pct > 0.5:
+        fill_color = Color.GREEN.lerp(Color.YELLOW, (1.0 - pct) * 2.0)
+    else:
+        fill_color = Color.YELLOW.lerp(Color.RED, (0.5 - pct) * 2.0)
 
-func _on_ammo_changed(current: int, reserve: int) -> void:
-    ammo_label.text = "%d | %d" % [current, reserve]
+    var fill_style := health_bar.get_theme_stylebox("fill").duplicate() as StyleBoxFlat
+    if fill_style:
+        fill_style.bg_color = fill_color
+        health_bar.add_theme_stylebox_override("fill", fill_style)
 
-    # Flash red when low
-    if current <= 3:
-        var tween: Tween = create_tween().set_loops(3)
-        tween.tween_property(ammo_label, "modulate", Color.RED, 0.1)
-        tween.tween_property(ammo_label, "modulate", Color.WHITE, 0.1)
+func set_score(score: int) -> void:
+    score_label.text = "Score  %06d" % score
 
-func _on_score_changed(new_score: int) -> void:
-    score_label.text = str(new_score).pad_zeros(6)
+func set_ammo(current: int, magazine: int) -> void:
+    if magazine == -1:
+        ammo_label.text = "Inf"
+    else:
+        ammo_label.text = "%d / %d" % [current, magazine]
 
-func show_damage_flash() -> void:
-    var tween: Tween = create_tween()
-    tween.tween_property(low_health_vignette, "modulate:a", 0.8, 0.05)
-    tween.tween_property(low_health_vignette, "modulate:a", low_health_vignette.modulate.a, 0.3)
-
-func set_ability_cooldown(ratio: float) -> void:
-    # ratio 0.0 = ready, 1.0 = on cooldown
-    ability_cooldown.material.set_shader_parameter("cooldown", ratio)
+func set_minimap_texture(texture: ViewportTexture) -> void:
+    minimap_view.texture = texture
 ```
 
 ### Pause Menu
@@ -1560,424 +1097,710 @@ func set_ability_cooldown(ratio: float) -> void:
 # PauseMenu.gd
 extends CanvasLayer
 
-@onready var resume_btn: Button = %ResumeButton
-@onready var settings_btn: Button = %SettingsButton
-@onready var main_menu_btn: Button = %MainMenuButton
-@onready var panel: PanelContainer = %Panel
-@onready var anim: AnimationPlayer = $AnimationPlayer
+signal resume_pressed
+signal quit_to_main_pressed
+
+@onready var resume_button: Button = $Panel/CenterContainer/VBoxContainer/ResumeButton
+@onready var settings_button: Button = $Panel/CenterContainer/VBoxContainer/SettingsButton
+@onready var quit_button: Button = $Panel/CenterContainer/VBoxContainer/QuitButton
 
 func _ready() -> void:
-    layer = 5
+    layer = 10
     process_mode = Node.PROCESS_MODE_ALWAYS
     visible = false
 
-    resume_btn.pressed.connect(close)
-    settings_btn.pressed.connect(_on_settings_pressed)
-    main_menu_btn.pressed.connect(_on_main_menu_pressed)
+    resume_button.pressed.connect(resume)
+    settings_button.pressed.connect(_open_settings)
+    quit_button.pressed.connect(func(): quit_to_main_pressed.emit())
 
-func _input(event: InputEvent) -> void:
-    if event.is_action_pressed("pause"):
-        if visible:
-            close()
-        else:
-            open()
+func _unhandled_input(event: InputEvent) -> void:
+    if not visible:
+        return
+    if event.is_action_pressed("ui_cancel"):
         get_viewport().set_input_as_handled()
-
-    if event.is_action_pressed("ui_cancel") and visible:
-        close()
-        get_viewport().set_input_as_handled()
+        resume()
 
 func open() -> void:
-    visible = true
     get_tree().paused = true
-    anim.play("slide_in")
-    await anim.animation_finished
-    resume_btn.grab_focus()
+    visible = true
+    resume_button.grab_focus()
 
-func close() -> void:
-    anim.play("slide_out")
-    await anim.animation_finished
+    modulate.a = 0.0
+    var tween := create_tween()
+    tween.tween_property(self, "modulate:a", 1.0, 0.2)
+
+func resume() -> void:
+    get_tree().paused = false
     visible = false
-    get_tree().paused = false
 
-func _on_settings_pressed() -> void:
-    # Push settings panel over the pause menu
+func _open_settings() -> void:
+    # Show settings overlay — implement by toggling a SettingsMenu CanvasLayer
     pass
-
-func _on_main_menu_pressed() -> void:
-    get_tree().paused = false
-    close()
-    await get_tree().process_frame
-    SceneManager.change_scene("res://ui/MainMenu.tscn")
 ```
 
-### Minimap Integration
+### Game Controller: Wiring It All Together
 
 ```gdscript
-# MinimapHUD.gd — the minimap widget inside HUD
-extends Control
-
-@onready var sub_vp: SubViewport = $SubViewportContainer/SubViewport
-@onready var minimap_cam: Camera3D = $SubViewportContainer/SubViewport/MinimapCamera
-@onready var player_dot: Control = $PlayerDot
-@onready var border: Panel = $Border
-
-@export var player: Node3D
-@export var cam_height: float = 80.0
-@export var cam_size: float = 40.0
-
-func _ready() -> void:
-    minimap_cam.projection = Camera3D.PROJECTION_ORTHOGONAL
-    minimap_cam.size = cam_size
-    minimap_cam.rotation_degrees.x = -90.0
-
-    # Only render "Minimap" render layer (layer bit 2)
-    minimap_cam.cull_mask = (1 << 1)  # Layer 2
-
-func _process(_delta: float) -> void:
-    if not is_instance_valid(player):
-        return
-
-    var pos: Vector3 = player.global_position
-    minimap_cam.global_position = Vector3(pos.x, cam_height, pos.z)
-
-    # Rotate player dot
-    player_dot.rotation = -player.rotation.y
-    # Player dot stays centered in the minimap (it's always the center)
-    player_dot.position = $SubViewportContainer.size * 0.5 - player_dot.size * 0.5
-```
-
-### Full SceneManager Autoload
-
-```gdscript
-# SceneManager.gd
+# GameController.gd — top-level scene script or autoload
 extends Node
-
-const MIN_LOADING_TIME: float = 0.4
-
-var _loading_path: String = ""
-var _is_loading: bool = false
-var _load_start: float = 0.0
-
-func _ready() -> void:
-    set_process(false)
-
-func change_scene(path: String, show_loading: bool = true) -> void:
-    if _is_loading:
-        push_warning("SceneManager: Already loading a scene")
-        return
-
-    _is_loading = true
-    _loading_path = path
-    _load_start = Time.get_ticks_msec() / 1000.0
-
-    if show_loading:
-        LoadingScreen.show_loading()
-    else:
-        TransitionOverlay.fade_out()
-        await TransitionOverlay.fade_complete
-
-    ResourceLoader.load_threaded_request(path)
-    set_process(true)
-
-func _process(_delta: float) -> void:
-    if not _is_loading:
-        return
-
-    var progress: Array = []
-    var status: ResourceLoader.ThreadLoadStatus = \
-        ResourceLoader.load_threaded_get_status(_loading_path, progress)
-
-    match status:
-        ResourceLoader.THREAD_LOAD_IN_PROGRESS:
-            if progress.size() > 0:
-                LoadingScreen.set_progress(progress[0])
-
-        ResourceLoader.THREAD_LOAD_LOADED:
-            set_process(false)
-            _finish_loading()
-
-        ResourceLoader.THREAD_LOAD_FAILED:
-            set_process(false)
-            _is_loading = false
-            push_error("SceneManager: Failed to load '%s'" % _loading_path)
-            LoadingScreen.hide_loading()
-
-func _finish_loading() -> void:
-    var elapsed: float = Time.get_ticks_msec() / 1000.0 - _load_start
-    var wait: float = max(0.0, MIN_LOADING_TIME - elapsed)
-
-    if wait > 0.0:
-        await get_tree().create_timer(wait).timeout
-
-    var packed: PackedScene = ResourceLoader.load_threaded_get(_loading_path)
-    _is_loading = false
-
-    LoadingScreen.hide_loading()
-    await get_tree().process_frame
-
-    get_tree().change_scene_to_packed(packed)
-
-    await get_tree().process_frame
-    TransitionOverlay.fade_in()
-```
-
-### Wiring It All Together
-
-In your main game scene, add the HUD and PauseMenu as child CanvasLayers. The HUD connects to game state signals. The PauseMenu handles `pause` input automatically.
-
-```gdscript
-# Main.gd — the root of the game world scene
-extends Node3D
 
 @onready var hud: CanvasLayer = $HUD
 @onready var pause_menu: CanvasLayer = $PauseMenu
-@onready var player: CharacterBody3D = $Player
+@onready var loading_screen: CanvasLayer = $LoadingScreen
+@onready var main_menu: CanvasLayer = $MainMenu
 
 func _ready() -> void:
-    # Wire player signals to HUD
-    player.health_changed.connect(hud._on_health_changed)
-    player.ammo_changed.connect(hud._on_ammo_changed)
+    main_menu.start_game_pressed.connect(_start_game)
+    main_menu.settings_pressed.connect(_open_settings)
+    pause_menu.resume_pressed.connect(func(): pass)  # Already handled in PauseMenu
+    pause_menu.quit_to_main_pressed.connect(_quit_to_main)
 
-    # Wire minimap to player
-    hud.get_node("%Minimap").player = player
+func _unhandled_input(event: InputEvent) -> void:
+    if event.is_action_pressed("pause") and not main_menu.visible:
+        if pause_menu.visible:
+            pause_menu.resume()
+        else:
+            pause_menu.open()
 
-    # Set initial HUD values
-    hud._on_health_changed(player.health, player.max_health)
-    hud._on_ammo_changed(player.ammo, player.max_ammo)
+func _start_game() -> void:
+    main_menu.visible = false
+    loading_screen.load_scene("res://levels/level_01.tscn", "Loading...")
+
+func _open_settings() -> void:
+    # Toggle SettingsMenu CanvasLayer
+    pass
+
+func _quit_to_main() -> void:
+    get_tree().paused = false
+    await get_tree().create_timer(0.05).timeout
+    get_tree().change_scene_to_file("res://main_menu.tscn")
 ```
+
+---
+
+## 12. Animating UI with Tweens
+
+Static menus feel lifeless. A well-animated UI communicates responsiveness and polish — buttons that pulse when focused, panels that slide in from off-screen, health bars that smoothly drain rather than snapping to the new value. Godot's `Tween` system makes this straightforward without any animation tracks or AnimationPlayer overhead.
+
+### The Tween Workflow
+
+A Tween is created on demand with `create_tween()`, animates one or more properties, and is automatically freed when complete. You don't need to manage its lifecycle:
+
+```gdscript
+# Fade in a panel over 0.3 seconds
+func show_panel() -> void:
+    $Panel.modulate.a = 0.0
+    $Panel.visible = true
+    var tween := create_tween()
+    tween.tween_property($Panel, "modulate:a", 1.0, 0.3)\
+         .set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+```
+
+Key Tween methods:
+
+| Method | Description |
+|--------|-------------|
+| `tween_property(object, property, final_val, duration)` | Animate a property to a target value |
+| `tween_callback(callable)` | Call a function at this point in the sequence |
+| `tween_interval(duration)` | Wait for a duration before continuing |
+| `set_parallel(true)` | Run subsequent tweeners at the same time |
+| `set_trans(Tween.TRANS_*)` | Easing curve type |
+| `set_ease(Tween.EASE_*)` | Ease in, out, or in-out |
+| `set_loops(count)` | Loop the tween N times (0 = infinite) |
+| `kill()` | Stop and discard the tween |
+
+### Common UI Animations
+
+**Slide-in from left:**
+```gdscript
+func animate_in_from_left(panel: Control) -> void:
+    var start_x := -panel.size.x
+    var end_x := panel.position.x
+    panel.position.x = start_x
+    panel.visible = true
+
+    var tween := create_tween()
+    tween.tween_property(panel, "position:x", end_x, 0.35)\
+         .set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+```
+
+**Slide-out to right:**
+```gdscript
+func animate_out_to_right(panel: Control) -> void:
+    var end_x := get_viewport().get_visible_rect().size.x
+    var tween := create_tween()
+    tween.tween_property(panel, "position:x", end_x, 0.25)\
+         .set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+    tween.tween_callback(func(): panel.visible = false)
+```
+
+**Button press feedback (scale bounce):**
+```gdscript
+# Connect to Button.button_down signal
+func _on_button_down() -> void:
+    var tween := create_tween()
+    tween.tween_property($Button, "scale", Vector2(0.92, 0.92), 0.08)\
+         .set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+
+# Connect to Button.button_up signal
+func _on_button_up() -> void:
+    var tween := create_tween()
+    tween.tween_property($Button, "scale", Vector2(1.0, 1.0), 0.12)\
+         .set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+```
+
+**Smooth health bar drain:**
+```gdscript
+var _health_tween: Tween
+
+func set_health_animated(current: int, maximum: int) -> void:
+    health_bar.max_value = maximum
+
+    if _health_tween:
+        _health_tween.kill()
+
+    _health_tween = create_tween()
+    _health_tween.tween_property(health_bar, "value", float(current), 0.4)\
+                 .set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+```
+
+**Score counter roll-up:**
+```gdscript
+var _displayed_score: int = 0
+var _score_tween: Tween
+
+func set_score_animated(new_score: int) -> void:
+    if _score_tween:
+        _score_tween.kill()
+
+    _score_tween = create_tween()
+    _score_tween.tween_method(
+        func(value: int) -> void:
+            score_label.text = "Score  %06d" % value,
+        _displayed_score,
+        new_score,
+        0.6
+    ).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+    _score_tween.tween_callback(func(): _displayed_score = new_score)
+```
+
+**Focus pulse on a button (infinite loop):**
+```gdscript
+# Play this when a button grabs focus to draw attention
+func pulse_button(button: Button) -> void:
+    var tween := create_tween()
+    tween.set_loops()  # Loop forever until killed
+    tween.tween_property(button, "modulate", Color(1.3, 1.3, 1.3, 1.0), 0.5)\
+         .set_trans(Tween.TRANS_SINE)
+    tween.tween_property(button, "modulate", Color.WHITE, 0.5)\
+         .set_trans(Tween.TRANS_SINE)
+
+    button.focus_exited.connect(func():
+        tween.kill()
+        button.modulate = Color.WHITE
+    , CONNECT_ONE_SHOT)
+```
+
+### Transition Between Menus
+
+A clean full-screen transition avoids jarring cuts between menus:
+
+```gdscript
+# ScreenTransition.gd — CanvasLayer at layer 200
+extends CanvasLayer
+
+@onready var overlay: ColorRect = $ColorRect
+
+func transition(callable: Callable, duration: float = 0.3) -> void:
+    overlay.modulate.a = 0.0
+    overlay.visible = true
+
+    var tween := create_tween()
+    # Fade to black
+    tween.tween_property(overlay, "modulate:a", 1.0, duration)\
+         .set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+    # Execute the scene change in the middle
+    tween.tween_callback(callable)
+    # Fade back in
+    tween.tween_property(overlay, "modulate:a", 0.0, duration)\
+         .set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+    tween.tween_callback(func(): overlay.visible = false)
+
+# Usage:
+# screen_transition.transition(func(): get_tree().change_scene_to_file("res://game.tscn"))
+```
+
+### Easing Curve Reference
+
+The `TRANS_*` constant controls the shape of the curve; `EASE_*` controls which end of the curve is emphasized.
+
+| TRANS | Character |
+|-------|-----------|
+| `TRANS_LINEAR` | Constant speed, robotic feel |
+| `TRANS_QUAD` | Gentle acceleration/deceleration, versatile default |
+| `TRANS_CUBIC` | Slightly stronger than QUAD |
+| `TRANS_QUART` | Strong acceleration/deceleration |
+| `TRANS_EXPO` | Very sharp start or end, dramatic |
+| `TRANS_SINE` | Smooth and natural, good for breathing/idle |
+| `TRANS_BOUNCE` | Bounces at the end, playful |
+| `TRANS_BACK` | Overshoots slightly, then settles, energetic |
+| `TRANS_ELASTIC` | Rubber-band overshoot, cartoonish |
+| `TRANS_SPRING` | Physics-based spring, most natural |
+
+For UI:
+- **Panels sliding in**: TRANS_BACK + EASE_OUT (pleasant overshoot)
+- **Health bar draining**: TRANS_QUAD + EASE_OUT
+- **Fade in/out**: TRANS_QUAD or TRANS_SINE
+- **Score counting**: TRANS_QUAD + EASE_OUT
+- **Error shake**: TRANS_SINE + EASE_IN_OUT with a loop
 
 ---
 
 ## API Quick Reference
 
-| Class | Purpose | Key Properties / Methods |
-|-------|---------|--------------------------|
-| `Control` | Base UI node | `anchor_*`, `offset_*`, `size`, `custom_minimum_size`, `theme`, `focus_mode`, `grab_focus()` |
-| `Container` | Base layout class | `get_children()`, automatic layout via size flags |
-| `VBoxContainer` | Vertical stack | `add_theme_constant_override("separation", n)` |
-| `HBoxContainer` | Horizontal stack | Same as VBox |
-| `GridContainer` | Grid layout | `columns` |
-| `MarginContainer` | Adds padding | `margin_*` constants via theme override |
-| `CenterContainer` | Centers child | Use Full Rect anchors |
-| `ScrollContainer` | Scrollable content | `scroll_vertical`, `scroll_horizontal` |
-| `Button` | Clickable button | `text`, `icon`, `pressed`, `toggled` |
-| `Label` | Static text | `text`, `autowrap_mode`, `clip_text` |
-| `TextureRect` | Image display | `texture`, `stretch_mode`, `expand_mode` |
-| `ProgressBar` | Value bar | `min_value`, `max_value`, `value`, `fill_mode` |
-| `LineEdit` | Single-line input | `text`, `placeholder_text`, `text_submitted` |
-| `OptionButton` | Dropdown | `add_item()`, `selected`, `item_selected` |
-| `TabContainer` | Tabbed panels | `current_tab`, `tab_changed` |
-| `ItemList` | Scrollable list | `add_item()`, `select_mode`, `item_selected` |
-| `RichTextLabel` | Formatted text | `bbcode_enabled`, `text`, `visible_ratio`, `meta_clicked` |
-| `Theme` | Style database | Edited in Theme editor, assigned via `theme` property |
-| `StyleBoxFlat` | Programmatic style | `bg_color`, `border_*`, `corner_radius_*`, `shadow_*` |
-| `CanvasLayer` | UI canvas | `layer`, `follow_viewport`, `process_mode` |
-| `SubViewport` | Render-to-texture | `render_target_update_mode`, `get_texture()` |
-| `SubViewportContainer` | Display SubViewport | `stretch`, contains SubViewport as child |
-| `ResourceLoader` | Async loading | `load_threaded_request()`, `load_threaded_get_status()`, `load_threaded_get()` |
+### Control
+
+| Member | Type | Description |
+|--------|------|-------------|
+| `grab_focus()` | Method | Give this Control keyboard/gamepad focus |
+| `release_focus()` | Method | Remove focus |
+| `has_focus()` | Method | Returns `true` if this node has focus |
+| `set_anchors_preset(preset)` | Method | Apply an anchor preset (PRESET_TOP_LEFT, PRESET_FULL_RECT, etc.) |
+| `size_flags_horizontal` | Property | FILL, EXPAND, SHRINK_BEGIN, SHRINK_CENTER, SHRINK_END |
+| `size_flags_vertical` | Property | Same flags, vertical axis |
+| `custom_minimum_size` | Vector2 | Minimum size regardless of container |
+| `focus_neighbor_top/bottom/left/right` | NodePath | Override auto-focus navigation |
+| `focus_entered` | Signal | Focus arrived |
+| `focus_exited` | Signal | Focus left |
+| `add_theme_*_override(name, value)` | Method | Override a single theme property locally |
+
+### CanvasLayer
+
+| Member | Type | Description |
+|--------|------|-------------|
+| `layer` | int | Draw order. Higher = on top. |
+| `offset` | Vector2 | Offset the entire layer |
+| `follow_viewport_enabled` | bool | Scale layer with viewport |
+| `follow_viewport_scale` | float | Scale factor when follow_viewport_enabled |
+
+### Containers
+
+| Node | Key Property | Behavior |
+|------|-------------|----------|
+| `VBoxContainer` | `separation` (theme constant) | Stack vertically |
+| `HBoxContainer` | `separation` (theme constant) | Stack horizontally |
+| `MarginContainer` | `margin_*` (theme constants) | Add padding |
+| `GridContainer` | `columns` | Grid with N columns |
+| `ScrollContainer` | `horizontal_scroll_mode`, `vertical_scroll_mode` | Scrollable content |
+| `CenterContainer` | — | Center single child |
+| `PanelContainer` | panel StyleBox | Panel background + margins |
+
+### Theme
+
+| Method | Description |
+|--------|-------------|
+| `set_stylebox(name, type, stylebox)` | Assign a StyleBox for a node type/state |
+| `set_color(name, type, color)` | Assign a Color |
+| `set_font(name, type, font)` | Assign a Font |
+| `set_font_size(name, type, size)` | Assign a font size |
+| `set_constant(name, type, value)` | Assign an integer constant (spacing, margin) |
+| `set_default_font(font)` | Set the fallback font for all nodes |
+| `set_default_font_size(size)` | Set the fallback font size |
+
+### RichTextLabel
+
+| Member | Type | Description |
+|--------|------|-------------|
+| `bbcode_enabled` | bool | Enable BBCode parsing |
+| `text` | String | Content (uses BBCode if enabled) |
+| `visible_characters` | int | How many characters to render (-1 = all) |
+| `visible_ratio` | float | 0.0–1.0 equivalent of visible_characters |
+| `append_text(text)` | Method | Add text without replacing existing content |
+| `clear()` | Method | Clear all content |
+| `url_clicked(meta)` | Signal | Fired when a `[url]` tag is clicked |
+
+### SubViewport
+
+| Member | Type | Description |
+|--------|------|-------------|
+| `size` | Vector2i | Render resolution |
+| `render_target_update_mode` | Enum | UPDATE_DISABLED, UPDATE_ONCE, UPDATE_WHEN_VISIBLE, UPDATE_ALWAYS |
+| `transparent_bg` | bool | Transparent background |
+| `own_world_3d` | bool | Use a separate 3D world |
+| `get_texture()` | Method | Returns the ViewportTexture |
+
+### Label3D
+
+| Member | Type | Description |
+|--------|------|-------------|
+| `text` | String | Displayed text |
+| `font_size` | int | Size in 3D units |
+| `billboard` | BaseMaterial3D.BillboardMode | BILLBOARD_DISABLED, BILLBOARD_ENABLED, BILLBOARD_FIXED_Y |
+| `no_depth_test` | bool | Render on top of all 3D geometry |
+| `modulate` | Color | Tint and alpha |
+| `alpha_cut` | Enum | How to handle transparent pixels |
+
+### ResourceLoader (Threaded)
+
+| Method | Description |
+|--------|-------------|
+| `load_threaded_request(path, type_hint, use_sub_threads)` | Start async load |
+| `load_threaded_get_status(path, progress)` | Query status; fills `progress[0]` (0.0–1.0) |
+| `load_threaded_get(path)` | Retrieve loaded resource (call only after THREAD_LOAD_LOADED) |
+
+Status codes: `THREAD_LOAD_INVALID_RESOURCE`, `THREAD_LOAD_IN_PROGRESS`, `THREAD_LOAD_FAILED`, `THREAD_LOAD_LOADED`.
 
 ---
 
 ## Common Pitfalls
 
-### Pitfall 1: Positioning Controls with position instead of anchors
+### 1. Absolute Positioning
 
 **WRONG:**
 ```gdscript
-# This health bar is at pixel 10,10 — will be in the wrong place on different resolutions
-$HealthBar.position = Vector2(10.0, 10.0)
+# Positions elements at fixed pixel coordinates
+$HealthBar.position = Vector2(20, 20)
+$ScoreLabel.position = Vector2(1080, 20)  # Only works at 1280x720!
 ```
+
+This breaks instantly on any resolution other than the one you tested on. The health bar might be off-screen at 1920x1080.
 
 **RIGHT:**
 ```gdscript
-# Anchor to top-left with pixel offsets — correct at any resolution
-$HealthBar.anchor_left = 0.0
-$HealthBar.anchor_top = 0.0
-$HealthBar.anchor_right = 0.0
-$HealthBar.anchor_bottom = 0.0
-$HealthBar.offset_left = 10.0
-$HealthBar.offset_top = 10.0
-# Or just set it in the editor with the anchor preset toolbar
+# Use containers and anchor presets instead
+$HealthBar.set_anchors_preset(Control.PRESET_TOP_LEFT)
+$ScoreLabel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+# Let containers handle the rest
 ```
 
-### Pitfall 2: Not setting process_mode on pause menus
+Use containers as your default layout strategy. Use anchors when an element must be pinned to a specific corner or edge. Test at 1280x720, 1920x1080, and 2560x1440 to verify your layout holds.
+
+---
+
+### 2. No Focus Setup
 
 **WRONG:**
 ```gdscript
-func open_pause_menu() -> void:
-    $PauseMenu.visible = true
-    get_tree().paused = true
-    # Now the pause menu's buttons don't respond because the tree is paused!
-```
-
-**RIGHT:**
-```gdscript
-# In PauseMenu._ready():
 func _ready() -> void:
-    process_mode = Node.PROCESS_MODE_ALWAYS  # Process even when tree is paused
-    # Now the pause menu works correctly
+    # Menu opens, no grab_focus() called
+    # Gamepad user sees no selected button, d-pad does nothing
+    pass
 ```
 
-### Pitfall 3: Forgetting to grab_focus when showing menus
-
-**WRONG:**
-```gdscript
-func show_main_menu() -> void:
-    visible = true
-    # Gamepad user can't navigate — nothing is focused
-```
+This is an accessibility failure. Gamepad and keyboard users cannot navigate the menu at all.
 
 **RIGHT:**
 ```gdscript
-func show_main_menu() -> void:
-    visible = true
-    await get_tree().process_frame  # Let layout settle first
-    $PlayButton.grab_focus()        # Gamepad navigation starts here
+func _ready() -> void:
+    $VBoxContainer/StartButton.grab_focus()
+
+    # Also set up wrapping so focus doesn't dead-end at the list edges
+    var buttons: Array[Button] = [start_button, settings_button, quit_button]
+    for i in buttons.size():
+        buttons[i].focus_neighbor_bottom = buttons[(i + 1) % buttons.size()].get_path()
+        buttons[i].focus_neighbor_top = buttons[(i - 1 + buttons.size()) % buttons.size()].get_path()
 ```
 
-### Pitfall 4: Calling ResourceLoader.load_threaded_get() before load is complete
+---
+
+### 3. HUD Parented to Camera3D
+
+**WRONG:**
+```
+Camera3D
+└── CanvasLayer (HUD)        # WRONG! Moves with camera rotation/position
+    └── ProgressBar (health)
+```
+
+The HUD moves with the camera. It may rotate or drift as the player looks around.
+
+**RIGHT:**
+```
+Main (Node3D)
+├── Camera3D                 # 3D camera by itself
+├── Player
+└── CanvasLayer (HUD)        # Sibling of the 3D world, NOT a child of Camera3D
+    └── ProgressBar (health)
+```
+
+CanvasLayer is always a sibling of the 3D world (or a child of the root node), never a child of any 3D node.
+
+---
+
+### 4. Blocking Load
 
 **WRONG:**
 ```gdscript
-func load_level(path: String) -> void:
-    ResourceLoader.load_threaded_request(path)
-    var scene: PackedScene = ResourceLoader.load_threaded_get(path)  # Called immediately!
-    # This blocks the main thread waiting for the load to finish — same as synchronous load
+func go_to_next_level() -> void:
+    # Blocks the main thread — game freezes while loading!
+    var scene := load("res://levels/level_02.tscn")
+    get_tree().change_scene_to_packed(scene)
 ```
+
+On large scenes, this freezes the game for several seconds with no feedback to the player.
 
 **RIGHT:**
 ```gdscript
+func go_to_next_level() -> void:
+    loading_screen.load_scene("res://levels/level_02.tscn")
+    # Loading screen shows real progress via load_threaded_get_status()
+    # Game loop continues running, animations play, player sees a progress bar
+```
+
+`ResourceLoader.load_threaded_request()` loads in a background thread. The game loop keeps running and you animate a progress bar with the real load percentage.
+
+---
+
+### 5. Styling Every Button Individually
+
+**WRONG:**
+```gdscript
+func _ready() -> void:
+    # 50 buttons, each with its own one-off overrides
+    $StartButton.add_theme_stylebox_override("normal", make_button_style(Color.BLUE))
+    $SettingsButton.add_theme_stylebox_override("normal", make_button_style(Color.BLUE))
+    $CreditsButton.add_theme_stylebox_override("normal", make_button_style(Color.BLUE))
+    # ... 47 more buttons
+```
+
+This is duplicated work. When the design changes, you update 50 buttons individually.
+
+**RIGHT:**
+```gdscript
+# Create one Theme resource, assign to root Control
+# All buttons inherit the style automatically
+func _ready() -> void:
+    var root_control: Control = $Panel
+    root_control.theme = ThemeBuilder.create_game_theme()
+    # All 50 buttons now styled identically
+    # Change Theme once to restyle everything
+```
+
+Create one Theme, assign it to the topmost Control node (or the root of each major UI scene), and let inheritance do the work.
+
+---
+
+### Bonus Pitfalls
+
+**Bonus 1: Not handling process mode on UI that runs during pause**
+
+If your pause menu or settings overlay does not have `process_mode = PROCESS_MODE_ALWAYS`, its buttons stop responding the moment `get_tree().paused = true` is set. Everything freezes — including the "Resume" button. Set `process_mode` to `PROCESS_MODE_ALWAYS` on the CanvasLayer or its root Control for any UI that must remain interactive during pause.
+
+**Bonus 2: Using a single ProgressBar stylebox reference across multiple nodes**
+
+```gdscript
+# WRONG: Both bars share the same StyleBoxFlat instance
+var fill_style := StyleBoxFlat.new()
+fill_style.bg_color = Color.GREEN
+health_bar.add_theme_stylebox_override("fill", fill_style)
+mana_bar.add_theme_stylebox_override("fill", fill_style)
+
+# Later, changing health bar color changes BOTH bars!
+fill_style.bg_color = Color.RED  # Also changes mana bar
+```
+
+Always `duplicate()` a stylebox before modifying it for a specific node:
+
+```gdscript
+# RIGHT: Each bar has its own independent StyleBoxFlat
+var health_fill := StyleBoxFlat.new()
+health_fill.bg_color = Color.GREEN
+health_bar.add_theme_stylebox_override("fill", health_fill)
+
+var mana_fill := health_fill.duplicate()
+mana_fill.bg_color = Color(0.2, 0.4, 1.0)
+mana_bar.add_theme_stylebox_override("fill", mana_fill)
+```
+
+**Bonus 3: Connecting to pressed inside _process**
+
+```gdscript
+# WRONG: Reconnects every frame — pressed fires hundreds of times per click
 func _process(_delta: float) -> void:
-    var status := ResourceLoader.load_threaded_get_status(_loading_path)
-    if status == ResourceLoader.THREAD_LOAD_LOADED:
-        var scene: PackedScene = ResourceLoader.load_threaded_get(_loading_path)
-        # NOW it's safe to get — load is complete
+    $Button.pressed.connect(_on_button_pressed)
 ```
 
-### Pitfall 5: Styling individual nodes instead of using a Theme
+Connect signals once in `_ready()`, or disconnect before reconnecting if you need to change the handler dynamically. Use `is_connected()` to check first.
 
-**WRONG:**
 ```gdscript
-# Doing this for every button in the game
-$Button1.add_theme_color_override("font_color", Color.WHITE)
-$Button2.add_theme_color_override("font_color", Color.WHITE)
-$Button3.add_theme_color_override("font_color", Color.WHITE)
-# Now changing the color means touching every script
+# RIGHT: Connect once on ready
+func _ready() -> void:
+    $Button.pressed.connect(_on_button_pressed)
 ```
 
-**RIGHT:**
+**Bonus 4: Forgetting to set custom_minimum_size on empty containers**
+
+A `CenterContainer` or `PanelContainer` with no children and no `custom_minimum_size` collapses to zero size and becomes invisible. When building dynamic UIs that add children later, give the container a minimum size:
+
 ```gdscript
-# Define font_color once in game_theme.tres under Button → Colors
-# Assign the theme to the root Control of each scene
-# All buttons inherit the color automatically
-# To change it game-wide: edit one Theme resource
+tooltip_panel.custom_minimum_size = Vector2(200, 80)
 ```
 
-### Pitfall 6: Putting UI directly as children of 3D nodes without CanvasLayer
+This prevents the container from disappearing before its children are populated.
 
-**WRONG:**
-```
-Node3D (GameScene)
-  Player
-  EnemySpawner
-  Control (HUD)  ← directly in 3D scene, no CanvasLayer
-    ProgressBar
-```
+---
 
-**RIGHT:**
-```
-Node3D (GameScene)
-  Player
-  EnemySpawner
-  CanvasLayer (HUD, layer=1)  ← isolated from 3D coordinate space
-    Control
-      ProgressBar
+## Responsive Design: Viewport Stretch Settings
+
+Your containers and anchors handle layout — but they need to know the rules for how the game window itself scales. Configure this in **Project Settings > Display > Window > Stretch**:
+
+| Setting | Recommended Value | Notes |
+|---------|-------------------|-------|
+| **Mode** | `canvas_items` | Scales the 2D canvas (and thus the CanvasLayer UI) with the window |
+| **Aspect** | `keep_height` | Maintains the height; adds horizontal letterboxing on narrow windows |
+| **Scale** | `1.0` | Base scale; HiDPI displays may benefit from `2.0` |
+
+With `mode = canvas_items` and `aspect = keep_height`, your UI designed at 1920x1080 will scale cleanly to any window size. Wider windows add more horizontal space; narrower windows add horizontal black bars. This is the most common setup for desktop games.
+
+For pixel-art or fixed-resolution games, use `mode = viewport` instead — the entire scene renders at a fixed resolution and is scaled up with nearest-neighbor filtering. UI designed at 320x180 will display sharply at 1920x1080 as a 6x scale.
+
+In GDScript you can query the actual viewport size at runtime:
+
+```gdscript
+var viewport_size := get_viewport().get_visible_rect().size
+# Use this to position elements that need to be viewport-size-aware at runtime
 ```
 
 ---
 
 ## Exercises
 
-### Exercise 1: Responsive Layout (30–45 minutes)
+### Exercise 1: Settings Menu with Persistent Config (30–45 min)
 
-Build a settings screen with at least four sections (Audio, Graphics, Controls, Gameplay). Requirements:
-- Use `TabContainer` for the four sections
-- Each tab uses `VBoxContainer` + `MarginContainer` for layout
-- Audio tab: three `HSlider` controls (Master, Music, SFX) wired to `AudioServer` bus volumes
-- Graphics tab: an `OptionButton` for resolution, a `CheckButton` for fullscreen
-- The layout must look correct at 1280x720, 1920x1080, and 2560x1440 (test by resizing the window)
-- Back button returns to the previous screen via `SceneManager` or a signal
+Build a complete settings menu that saves and loads preferences.
 
-Bonus: save settings to a config file using `ConfigFile` and load them on startup.
+Requirements:
+- Three `HSlider` nodes connected to the Master, Music, and SFX audio buses via `AudioServer`
+- A `CheckButton` for fullscreen toggle using `DisplayServer.window_set_mode()`
+- An `OptionButton` for resolution presets: 1280x720, 1920x1080, 2560x1440
+- Persist all settings with `ConfigFile` to `user://settings.cfg`
+- Load saved settings in `_ready()` so they apply on game launch
 
-### Exercise 2: Dialogue System with RichTextLabel (45–60 minutes)
-
-Build a dialogue box that:
-- Uses `RichTextLabel` with BBCode for character name (bold, colored by character) and dialogue text
-- Implements a typewriter effect — text appears letter by letter at a configurable speed
-- Spacebar or A button skips the typewriter to reveal the full text immediately
-- Next/continue button advances to the next dialogue entry
-- Dialogue data comes from a `Resource` class (a `DialogueData` resource with `Array[DialogueLine]`)
-- At least one dialogue line uses `[wave]` or a custom BBCode effect
-- A clickable `[url=...]` link in one line opens a tooltip panel
-
-### Exercise 3: HUD with Minimap (60–90 minutes)
-
-Build a complete HUD for a top-down game:
-- Health bar (ProgressBar, smooth tween on damage)
-- Ammo counter (Label, flashes red when <= 20% ammo)
-- Score display (Label, right-aligned, zero-padded to 6 digits)
-- Minimap in the bottom-right corner using `SubViewportContainer` + `Camera3D` (orthographic, top-down)
-- Player is shown as a rotating arrow dot on the minimap
-- A "WANTED" star counter in the top-right (5 TextureRect stars that light up)
-- Low-health vignette overlay (ColorRect that fades in as health drops below 30%)
-
-The whole HUD must be a single `CanvasLayer` scene that can be instanced into any game scene.
-
-### Exercise 4: Complete Scene Transition System (60–90 minutes)
-
-Build a full scene transition system:
-- `SceneManager` autoload with `change_scene(path, use_loading_screen)` method
-- For fast loads (< 0.5s): a CrossFade overlay (black ColorRect, fade out → change scene → fade in)
-- For slow loads (≥ 0.5s): a loading screen with ProgressBar, a rotating logo, and random loading tips
-- Loading screen enforces a minimum display time of 0.5 seconds to avoid flashing
-- Main menu calls `SceneManager.change_scene()` to go to the game
-- Pause menu calls it to return to main menu
-- Add a "simulate slow load" debug checkbox that artificially delays the load to test the loading screen
+Stretch goals:
+- Add a "Reset to Defaults" button
+- Add a graphics quality dropdown (Low/Medium/High) that adjusts shadow quality and SSAO
+- Show the current value next to each slider (e.g., "Master Volume: 80%")
 
 ---
 
-## Recommended Reading
+### Exercise 2: Dialogue System (60–90 min)
 
-| Resource | URL | What It Covers |
-|----------|-----|----------------|
-| Control node docs | [docs.godotengine.org/en/stable/classes/class_control.html](https://docs.godotengine.org/en/stable/classes/class_control.html) | Full Control API: anchors, size flags, focus, themes |
-| Using Containers | [docs.godotengine.org/en/stable/tutorials/ui/gui_containers.html](https://docs.godotengine.org/en/stable/tutorials/ui/gui_containers.html) | Container types and size flags explained |
-| Themes | [docs.godotengine.org/en/stable/tutorials/ui/gui_using_theme_editor.html](https://docs.godotengine.org/en/stable/tutorials/ui/gui_using_theme_editor.html) | Theme editor walkthrough |
-| RichTextLabel | [docs.godotengine.org/en/stable/tutorials/ui/bbcode_in_richtextlabel.html](https://docs.godotengine.org/en/stable/tutorials/ui/bbcode_in_richtextlabel.html) | All BBCode tags, custom effects |
-| ResourceLoader | [docs.godotengine.org/en/stable/classes/class_resourceloader.html](https://docs.godotengine.org/en/stable/classes/class_resourceloader.html) | Async loading API reference |
-| SubViewport | [docs.godotengine.org/en/stable/classes/class_subviewport.html](https://docs.godotengine.org/en/stable/classes/class_subviewport.html) | SubViewport and render modes |
-| Multiple resolutions | [docs.godotengine.org/en/stable/tutorials/rendering/multiple_resolutions.html](https://docs.godotengine.org/en/stable/tutorials/rendering/multiple_resolutions.html) | How to handle different screen sizes |
-| Viewport and Canvas | [docs.godotengine.org/en/stable/tutorials/rendering/viewports.html](https://docs.godotengine.org/en/stable/tutorials/rendering/viewports.html) | CanvasLayer, Viewport, render architecture |
+Build a dialogue system suitable for an RPG or visual novel.
+
+Requirements:
+- `RichTextLabel` for dialogue text with BBCode enabled
+- Typewriter effect using `visible_characters` animated with a `Tween`
+- Character portrait using `TextureRect` (left side, shows who is speaking)
+- Speaker name using a `Label` above the text
+- Next button (or `ui_accept` action) to advance text; if typing is in progress, skip to the end first
+- Choice system: a `VBoxContainer` of `Button` nodes shown at the end of a dialogue entry
+- Dialogue data as a `Resource` subclass (not hard-coded strings in the script)
+
+Data structure to implement:
+
+```gdscript
+# DialogueLine.gd
+class_name DialogueLine
+extends Resource
+
+@export var speaker_name: String = ""
+@export var portrait: Texture2D
+@export var text: String = ""
+@export var choices: Array[DialogueChoice] = []
+
+# DialogueChoice.gd
+class_name DialogueChoice
+extends Resource
+
+@export var label: String = ""
+@export var next_line_index: int = -1  # -1 = end dialogue
+```
+
+Stretch goals:
+- Animate the portrait in/out when the speaker changes
+- Add a `[shake]` effect to text for emotional moments
+- Support branching: dialogue trees that loop back or lead to different endings
+
+---
+
+### Exercise 3: Shop/Inventory UI (60–90 min)
+
+Build a shop and inventory screen.
+
+Requirements:
+- Inventory grid using `GridContainer` (6 columns, N rows)
+- Each cell is a `PanelContainer` with a `TextureRect` (item icon) and `Label` (quantity)
+- Tooltip: when hovering over an item, show a `RichTextLabel` panel with item name, stats, and description
+- Shop panel alongside inventory: another `GridContainer` showing items for sale
+- Drag-and-drop: drag items between inventory slots and equipment slots using `_get_drag_data()`, `_can_drop_data()`, `_drop_data()`
+- Buy button with price label; disable if player cannot afford
+
+Slot implementation:
+
+```gdscript
+# ItemSlot.gd
+extends PanelContainer
+
+signal item_clicked(slot: ItemSlot)
+
+@export var item: ItemResource = null :
+    set(value):
+        item = value
+        _refresh()
+
+func _refresh() -> void:
+    $TextureRect.texture = item.icon if item else null
+    $Label.text = str(item.quantity) if item and item.stackable else ""
+    $Label.visible = item != null and item.stackable
+
+func _get_drag_data(_position: Vector2) -> Variant:
+    if not item:
+        return null
+    var preview := TextureRect.new()
+    preview.texture = item.icon
+    preview.custom_minimum_size = Vector2(48, 48)
+    set_drag_preview(preview)
+    return {"slot": self, "item": item}
+
+func _can_drop_data(_position: Vector2, data: Variant) -> bool:
+    return data is Dictionary and data.has("item")
+
+func _drop_data(_position: Vector2, data: Variant) -> void:
+    var source_slot: ItemSlot = data["slot"]
+    var temp := item
+    item = source_slot.item
+    source_slot.item = temp
+```
+
+Stretch goals:
+- Equipment slots (helmet, chest, weapon, etc.) with type restrictions
+- Item comparison tooltip showing stat differences vs. currently equipped item
+- Animated "new item acquired" popup using a Tween
 
 ---
 
 ## Key Takeaways
 
-- **Control nodes are NOT Node2D nodes.** They live in a separate coordinate system driven by anchors, offsets, and size flags. Never manually position a Control inside a Container.
-- **Anchors define relative attachment to parent edges.** Anchor 0.0 = top/left edge, 1.0 = bottom/right edge. Use the anchor preset toolbar in the editor instead of setting numbers manually.
-- **Containers handle layout automatically.** Set `size_flags_horizontal = SIZE_EXPAND_FILL` for elements that should stretch, and let the Container do the math.
-- **One Theme, applied once at the top, styles everything underneath it.** Per-node overrides are for exceptions, not the rule. Design your Theme in the Theme editor, assign it to root UI nodes.
-- **CanvasLayer isolates UI from the 3D world.** Layer 1 for HUD, layer 5 for pause menu, layer 10 for loading screen and transitions. Always set `process_mode = PROCESS_MODE_ALWAYS` on pause menus.
-- **Always grab_focus when showing any menu.** Without it, gamepad users are stuck. Call `grab_focus()` after the open animation finishes (not before, or layout may not be settled).
-- **Async loading with ResourceLoader keeps the main thread alive.** Never call `load_threaded_get()` immediately after `load_threaded_request()`. Poll `load_threaded_get_status()` in `_process()` until status is `THREAD_LOAD_LOADED`.
-- **SubViewport renders any scene into a texture.** Use `SubViewportContainer` for the simplest setup. Control the camera's cull_mask to show only relevant geometry on the minimap.
-- **RichTextLabel's `visible_ratio`** is all you need for typewriter effects. Tween it from 0.0 to 1.0. No need for timers or custom character-by-character logic.
-- **Focus neighbors must form a closed graph.** If the last button's bottom neighbor isn't set, gamepad navigation falls off a cliff. Wire the last item back to the first to create a loop.
+1. **Never use absolute positioning for UI layout.** Containers — VBoxContainer, HBoxContainer, GridContainer, MarginContainer — automatically handle sizing, spacing, and responsive layout. They adjust when the window resizes. Raw coordinates do not.
+
+2. **CanvasLayer keeps UI independent of the 3D camera.** Always place HUDs, menus, and overlays as CanvasLayer nodes that are siblings of the 3D world root, never children of Camera3D. Use the `layer` property for draw ordering: 1 for HUD, 10 for pause, 100 for loading.
+
+3. **Theme resources give you global consistent styling.** Create one Theme, assign it to the root Control of each major UI scene, and every descendant inherits it. Change the Theme once to restyle the entire game. Use `add_theme_*_override()` only for intentional exceptions.
+
+4. **Focus + focus neighbors = gamepad and keyboard navigation.** Call `grab_focus()` when a menu opens so players know where they are. Set `focus_neighbor_*` for wrapping and cross-container navigation. Style the "focus" StyleBox prominently so it is obvious which element is selected. Test every menu without touching the mouse.
+
+5. **RichTextLabel with BBCode handles formatted text, dialogue, and item descriptions.** Use `visible_characters` with a Tween for typewriter effects. Built-in `[wave]`, `[shake]`, and `[rainbow]` effects work out of the box. Build your dialogue data as Resource subclasses for clean separation of data and presentation.
+
+6. **SubViewport renders to a texture — use it for minimaps, security camera feeds, and in-world screens.** Attach a Camera3D inside the SubViewport, point it where you want, then display the resulting ViewportTexture in a TextureRect. For dynamic content, set `render_target_update_mode = UPDATE_ALWAYS`; for static maps, `UPDATE_ONCE` saves GPU cycles.
+
+7. **ResourceLoader.load_threaded_request() for async loading with progress bars.** Never freeze the game with synchronous `load()` on large scenes. Request the load, poll `load_threaded_get_status()` in `_process()`, update a ProgressBar, and transition when status returns `THREAD_LOAD_LOADED`. Players see feedback instead of a frozen screen.
 
 ---
 
 ## What's Next
 
-[Module 12: Shaders & Visual Effects](module-12-shaders-vfx.md) — Writing GLSL shaders in Godot's shader language, screen-space effects, particle systems, GPUParticles3D, and making your game look polished.
+**Module 12: Multiplayer & Networking** — Your game has menus, a HUD, a minimap, and a loading screen. It looks and feels like a real game. Now let's make it multiplayer. Module 12 covers Godot's high-level multiplayer API: spawning players over a network, synchronizing positions with MultiplayerSynchronizer, authoritative server logic, and building a working lobby with player name display. The UI skills from this module transfer directly — lobby screens, player list panels, and ping indicators are all built with the same Control nodes you learned here.
+
+---
+
+[Back to Godot 4 Game Dev Learning Roadmap](godot4-gamedev-learning-roadmap.md)
