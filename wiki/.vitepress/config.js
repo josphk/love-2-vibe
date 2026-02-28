@@ -35,6 +35,7 @@ export default defineConfig({
           { text: 'ECS', link: '/ecs/ecs-learning-roadmap' },
           { text: 'GLSL Shaders', link: '/glsl/glsl-learning-roadmap' },
           { text: 'Game AI', link: '/game-ai/game-ai-learning-roadmap' },
+          { text: 'Gameplay Ability System', link: '/gas/gas-learning-roadmap' },
         ],
       },
       {

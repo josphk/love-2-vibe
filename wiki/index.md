@@ -13,6 +13,7 @@ A curated collection of learning roadmaps and modules for game development.
 - [ECS](ecs/ecs-learning-roadmap.md) — Entity-Component-System architecture
 - [GLSL Shaders](glsl/glsl-learning-roadmap.md) — GPU programming from first principles
 - [Game AI](game-ai/game-ai-learning-roadmap.md) — FSMs, behavior trees, pathfinding, and more
+- [Gameplay Ability System](gas/gas-learning-roadmap.md) — Scalable ability/effect architecture inspired by Unreal's GAS
 
 ## Art & Audio
 
