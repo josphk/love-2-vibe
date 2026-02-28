@@ -2435,7 +2435,7 @@ Build a reusable cutscene that plays when the player enters a boss room.
 
 ## What's Next
 
-**[Module 11: UI Systems — Menus, HUD, and Responsive Design](module-11-ui-systems-menus-hud.md)**
+**[Module 11: UI & Menus](module-11-ui-menus.md)**
 
 Your characters are alive. Now let's build the interface around them. Module 11 covers Godot's Control node system, anchors and margins for responsive UI, the theme system for consistent styling, building menus that actually feel good to navigate, and a production-grade HUD that updates reactively via signals. You'll also implement settings screens, pause menus, and loading screens — the infrastructure every game needs but few tutorials cover properly.
 

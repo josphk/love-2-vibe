@@ -1638,6 +1638,6 @@ Compare file sizes at each step. Check that materials transferred correctly. Thi
 
 You can now load assets, light them, and compose complete scenes. Your diorama looks good standing still. But games don't stand still.
 
-**[Module 3: State Management for Games](module-03-state-management-for-games.md)** teaches you how to manage game state — health, inventory, score, game phases — without triggering expensive re-renders. You'll learn Zustand (the state manager built by the same team behind R3F), the subscribe-with-selector pattern for frame-rate-safe reads, and how to architect state so your game logic stays clean as complexity grows.
+**[Module 3: Cameras, Input & Character](module-03-cameras-input-character.md)** teaches you how to manage game state — health, inventory, score, game phases — without triggering expensive re-renders. You'll learn Zustand (the state manager built by the same team behind R3F), the subscribe-with-selector pattern for frame-rate-safe reads, and how to architect state so your game logic stays clean as complexity grows.
 
 [Back to R3F Game Dev Learning Roadmap](r3f-gamedev-learning-roadmap.md)

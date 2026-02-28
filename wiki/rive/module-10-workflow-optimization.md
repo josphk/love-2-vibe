@@ -630,6 +630,6 @@ You've completed the Rive learning roadmap. From here:
 - **Explore the [Rive Community](https://rive.app/community)** — reverse-engineering community files is one of the best ways to learn new techniques
 - **Integrate with your game project** — start with a single HUD element or menu screen, prove the pipeline, then expand
 
-For character animation in LÖVE specifically, pair Rive (for UI) with [Spine](../spine/) (for game characters). The animation fundamentals you've learned here — bones, keyframes, easing, state machines — transfer directly between tools.
+For character animation in LÖVE specifically, pair Rive (for UI) with [Spine](https://esotericsoftware.com/) (for game characters). The animation fundamentals you've learned here — bones, keyframes, easing, state machines — transfer directly between tools.
 
 [← Back to Rive Learning Roadmap](rive-learning-roadmap.md)

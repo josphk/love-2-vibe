@@ -1908,7 +1908,7 @@ Extend the dungeon builder from the walkthrough with three additions.
 
 ## What's Next
 
-[Module 3: Assets, Materials, and Lighting](module-03-assets-materials-lighting.md)
+[Module 3: Assets & World Building](module-03-assets-world-building.md)
 
 Your scenes are well-structured. Now let's fill them with beautiful 3D assets, materials, and lighting. Module 3 covers importing 3D models from Blender, PBR materials and the StandardMaterial3D workflow, lighting setups (global illumination, SDFGI, sky lighting), and post-processing effects (bloom, tone mapping, ambient occlusion). By the end you'll have a dungeon that doesn't just run — it looks good.
 

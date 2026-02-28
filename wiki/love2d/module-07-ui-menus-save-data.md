@@ -2015,6 +2015,6 @@ Requirements:
 
 You have menus, settings, save data, and a HUD. Your game has every piece of chrome it needs to feel finished. The next step is to actually build a complete game.
 
-[Module 8: Build Your First Real Game](module-08-build-first-real-game.md) is where you scope a small project, commit to finishing it, and apply everything from Modules 0-7 into a shippable product.
+[Module 8: Build Your First Game](module-08-build-first-game.md) is where you scope a small project, commit to finishing it, and apply everything from Modules 0-7 into a shippable product.
 
 Back to the [LOVE2D Learning Roadmap](love2d-learning-roadmap.md).

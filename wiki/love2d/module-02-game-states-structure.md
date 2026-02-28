@@ -1121,4 +1121,4 @@ Add a Settings state accessible from the title screen. Requirements:
 
 You have screens. You have structure. You have entities that spawn and die.
 
-Next up: [Module 3: Input & Controls](module-03-input-controls.md) -- where you will handle keyboard, mouse, and gamepad input cleanly, build rebindable controls, and learn why `love.keyboard.isDown()` and `love.keypressed()` serve different purposes.
+Next up: [Module 3: Sprites & Animation](module-03-sprites-animation.md) -- where you will handle keyboard, mouse, and gamepad input cleanly, build rebindable controls, and learn why `love.keyboard.isDown()` and `love.keypressed()` serve different purposes.

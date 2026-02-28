@@ -281,7 +281,7 @@ Now that you can identify what game design *is* and separate it from adjacent di
 **[Module 1: Anatomy of a Mechanic](module-01-anatomy-of-a-mechanic.md)** breaks down how individual mechanics work -- inputs, outputs, feedback loops, and how a single mechanic can be tuned to create wildly different player experiences. You'll take the vocabulary from this module and apply it at a granular level.
 
 Also relevant as you progress:
-- **[Module 2: Feedback Loops and Pacing](module-02-feedback-loops-and-pacing.md)** -- How systems interact over time to create difficulty curves, snowball effects, and rubber-banding.
-- **[Module 3: Player Psychology and Motivation](module-03-player-psychology-and-motivation.md)** -- Why players *want* to make decisions in the first place. Intrinsic vs. extrinsic motivation, flow theory, and engagement.
+- **[Module 2: Systems Thinking & Emergent Gameplay](module-02-systems-thinking-emergent-gameplay.md)** -- How systems interact over time to create difficulty curves, snowball effects, and rubber-banding.
+- **[Module 3: Player Psychology & Motivation](module-03-player-psychology-motivation.md)** -- Why players *want* to make decisions in the first place. Intrinsic vs. extrinsic motivation, flow theory, and engagement.
 
 [Back to Game Design Theory Roadmap](game-design-theory-roadmap.md)

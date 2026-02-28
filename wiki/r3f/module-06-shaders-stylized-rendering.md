@@ -2227,6 +2227,6 @@ Hints:
 
 You now have the power to make anything look however you want. Every visual style is within reach. But shaders are just one axis of game visuals — the other is the world itself.
 
-**[Module 7: Environmental Storytelling & Level Design](module-07-environmental-storytelling-level-design.md)** takes your shader skills and applies them to building complete game environments — terrain, skyboxes, fog, particles, lighting design, and the art of making a space feel alive. You'll build a complete stylized environment that combines everything from this module with spatial design.
+**[Module 7: Post-Processing & VFX](module-07-post-processing-vfx.md)** takes your shader skills and applies them to building complete game environments — terrain, skyboxes, fog, particles, lighting design, and the art of making a space feel alive. You'll build a complete stylized environment that combines everything from this module with spatial design.
 
 [Back to R3F Game Dev Learning Roadmap](r3f-gamedev-learning-roadmap.md)

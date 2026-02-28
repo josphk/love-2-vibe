@@ -2819,6 +2819,6 @@ Hints:
 
 Your game now feels alive. Collisions have weight, pickups have sparkle, and the camera reacts to everything. The feedback layer is in place.
 
-Next, you need to handle the transition between game states -- menus, loading screens, level transitions, and scene management. **[Module 10: Menus, HUD & Scene Management](module-10-menus-hud-scene-management.md)** covers HTML overlay UI with React, in-world HUD elements, scene transitions with crossfades, and structuring a multi-screen game that doesn't become a tangled mess.
+Next, you need to handle the transition between game states -- menus, loading screens, level transitions, and scene management. **[Module 10: UI & Menus](module-10-ui-menus.md)** covers HTML overlay UI with React, in-world HUD elements, scene transitions with crossfades, and structuring a multi-screen game that doesn't become a tangled mess.
 
 [Back to R3F Game Dev Learning Roadmap](r3f-gamedev-learning-roadmap.md)

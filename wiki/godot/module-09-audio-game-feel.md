@@ -1637,7 +1637,7 @@ Goal: A portable, zero-dependency `juice_fx.gd` you can copy into any future God
 
 Your game feels great — responsive, punchy, and alive. Now it's time to make characters move. Module 10 covers Godot's animation system from the ground up: `AnimationPlayer` for property tracks and keyframes, `AnimationTree` for blending and state machines, and how to drive animations from character state (walk, run, jump, attack). You'll build a complete character with smooth transitions between states, blend trees for run-cycle blending based on speed, and one-shot attack animations that return cleanly to idle.
 
-[Continue to Module 10: Animation →](module-10-animation-animationtree.md)
+[Continue to Module 10: Animation →](module-10-animation-player-tree.md)
 
 ---
 

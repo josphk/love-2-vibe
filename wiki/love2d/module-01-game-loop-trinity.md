@@ -886,4 +886,4 @@ Using only the concepts from this module, build a single-screen Breakout prototy
 
 You now have a working game loop, input handling, basic collision, and a playable Pong. That is a real game. You built it from scratch.
 
-In [Module 2: Graphics & the Coordinate System](module-02-graphics-coordinate-system.md), you will learn how LOVE's coordinate system works in depth -- transforms (translate, rotate, scale), the graphics state stack (`push`/`pop`), sprite sheets, and how to build a camera system. The static rectangles of Pong are about to start spinning, scaling, and scrolling.
+In [Module 2: Game States & Structure](module-02-game-states-structure.md), you will learn how LOVE's coordinate system works in depth -- transforms (translate, rotate, scale), the graphics state stack (`push`/`pop`), sprite sheets, and how to build a camera system. The static rectangles of Pong are about to start spinning, scaling, and scrolling.

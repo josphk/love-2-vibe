@@ -305,6 +305,6 @@ This exercise trains the instinct that **subtraction is a design tool**, not jus
 
 ## What's Next?
 
-Now that you can identify and evaluate individual mechanics, the next step is understanding how they form **systems**. Head to [Module 2: Systems Thinking and Feedback Loops](module-02-systems-thinking.md) for positive/negative feedback loops, balancing mechanics, and how small interactions scale into economies and ecologies.
+Now that you can identify and evaluate individual mechanics, the next step is understanding how they form **systems**. Head to [Module 2: Systems Thinking & Emergent Gameplay](module-02-systems-thinking-emergent-gameplay.md) for positive/negative feedback loops, balancing mechanics, and how small interactions scale into economies and ecologies.
 
-If the "feel" discussion resonated, jump to [Module 9: Aesthetics and Juice](module-09-aesthetics-and-juice.md) for a deep dive on game feel, feedback, and making mechanics *feel* as good as they play.
+If the "feel" discussion resonated, jump to [Module 9: Aesthetics, Feel & Juice](module-09-aesthetics-feel-juice.md) for a deep dive on game feel, feedback, and making mechanics *feel* as good as they play.

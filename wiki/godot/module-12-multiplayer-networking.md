@@ -1580,4 +1580,4 @@ Build a complete lobby system. Features required:
 
 ## What's Next
 
-**[Module 13: Shaders & Visual Effects](module-13-shaders-visual-effects.md)** — Write your first vertex and fragment shaders in Godot's shader language, build a water surface, add post-processing effects with `WorldEnvironment` and `CompositorEffect`, and understand the rendering pipeline well enough to diagnose visual bugs.
+**[Module 13: Ship & What's Next](module-13-ship-whats-next.md)** — Write your first vertex and fragment shaders in Godot's shader language, build a water surface, add post-processing effects with `WorldEnvironment` and `CompositorEffect`, and understand the rendering pipeline well enough to diagnose visual bugs.

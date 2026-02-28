@@ -2210,7 +2210,7 @@ func _physics_process(delta: float) -> void:
 
 ## What's Next
 
-**[Module 5: Game Architecture — Signals, Resources, Autoloads, and Scene Management](module-05-game-architecture.md)**
+**[Module 5: Signals, Resources & Architecture](module-05-signals-resources-architecture.md)**
 
 Physics handles the movement. Module 5 is where you learn to structure an actual game. We'll cover Godot's signal system (the backbone of decoupled, maintainable code), Resource files for data-driven design, Autoload singletons for game state and managers, and the scene management patterns you'll use to build menus, transitions, and multi-scene games. Everything you built in this module will get a proper architecture around it.
 

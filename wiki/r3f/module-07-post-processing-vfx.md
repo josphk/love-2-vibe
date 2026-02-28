@@ -2777,6 +2777,6 @@ Hints:
 
 You can now control how your game *looks* at every level — from individual material shaders (Module 6) to full-screen post-processing and particle VFX (this module). The next challenge is making your game *sound* right and giving players the tools to tweak their experience.
 
-**[Module 8: Audio & Settings](module-08-audio-settings.md)** covers spatial audio with Web Audio API, sound effect triggering tied to game events, music systems with crossfading, and building a proper settings menu with graphics quality presets, audio controls, and input rebinding.
+**[Module 8: Procedural & Instanced Worlds](module-08-procedural-instanced-worlds.md)** covers spatial audio with Web Audio API, sound effect triggering tied to game events, music systems with crossfading, and building a proper settings menu with graphics quality presets, audio controls, and input rebinding.
 
 [Back to R3F Game Dev Learning Roadmap](r3f-gamedev-learning-roadmap.md)

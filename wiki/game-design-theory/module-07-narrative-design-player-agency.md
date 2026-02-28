@@ -288,6 +288,6 @@ Design a short narrative sequence with exactly three player choice points and on
 
 You now understand how narrative and player agency intersect. Explore how these principles connect to other design domains:
 
-- **[Module 4: Game Feel & Juice](module-04-game-feel-juice.md)** — How the moment-to-moment feel of inputs reinforces (or undermines) the player fantasy your narrative is building. A story about being a powerful warrior means nothing if the sword swing feels limp.
+- **[Module 9: Aesthetics, Feel & Juice](module-09-aesthetics-feel-juice.md)** — How the moment-to-moment feel of inputs reinforces (or undermines) the player fantasy your narrative is building. A story about being a powerful warrior means nothing if the sword swing feels limp.
 - **[Module 3: Player Psychology & Motivation](module-03-player-psychology-motivation.md)** — How intrinsic motivation, flow states, and self-determination theory explain *why* narrative agency is so emotionally powerful — and when it backfires.
 - **[Module 8: Prototyping & Playtesting](module-08-prototyping-playtesting.md)** — How to test whether your narrative actually lands. Playtesting narrative is uniquely tricky because story beats can only surprise a player once. Learn how to iterate on narrative without burning through your test audience.

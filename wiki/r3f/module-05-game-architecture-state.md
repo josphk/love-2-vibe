@@ -3063,6 +3063,6 @@ Hints:
 
 You now have the architectural bones of a real game: state management, scene flow, a pausable game clock, and patterns for scaling your codebase. But your player is a colored cube. Your enemies are colored cubes. Everything is colored cubes.
 
-**[Module 6: 3D Models, Animation & Assets](module-06-models-animation-assets.md)** teaches you to load GLTF models, play skeletal animations, manage assets with Suspense boundaries, and swap out those cubes for actual characters. Your game is about to start looking like a game.
+**[Module 6: Shaders & Stylized Rendering](module-06-shaders-stylized-rendering.md)** teaches you to load GLTF models, play skeletal animations, manage assets with Suspense boundaries, and swap out those cubes for actual characters. Your game is about to start looking like a game.
 
 [Back to R3F Game Dev Learning Roadmap](r3f-gamedev-learning-roadmap.md)

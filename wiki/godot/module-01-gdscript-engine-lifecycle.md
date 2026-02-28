@@ -1994,7 +1994,7 @@ func _on_state_changed(from: PlayerState, to: PlayerState) -> void:
 
 You know the language and you know the engine's heartbeat. You can write typed GDScript with confidence, you know exactly when each lifecycle function runs, and you've built a character that moves correctly using the right process loop.
 
-**[Module 2: Scenes, Nodes, and the Scene Tree](module-02-scenes-nodes-scene-tree.md)** covers Godot's most powerful idea — scenes as reusable, composable building blocks. You'll learn to design scene hierarchies that scale, understand instancing (Godot's prefab system), build an inventory of reusable scene components, and understand the parent-child relationship and signal-over-direct-reference architecture that makes large Godot projects maintainable.
+**[Module 2: Scene Composition & Nodes](module-02-scene-composition-nodes.md)** covers Godot's most powerful idea — scenes as reusable, composable building blocks. You'll learn to design scene hierarchies that scale, understand instancing (Godot's prefab system), build an inventory of reusable scene components, and understand the parent-child relationship and signal-over-direct-reference architecture that makes large Godot projects maintainable.
 
 Sneak peek: every entity in your game — player, enemy, bullet, pickup, UI element — should be its own scene. The scene tree is not just an organizational tool. It's your entire game architecture. Module 2 explains why.
 

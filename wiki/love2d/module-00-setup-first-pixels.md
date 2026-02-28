@@ -895,6 +895,6 @@ Build on the night scene from the walkthrough. Add at least three of the followi
 
 You can draw static scenes. You can put text on screen. You know enough Lua to be productive. Now it is time to make things **move**.
 
-**[Module 1: The Game Loop & Movement](module-01-game-loop-movement.md)** introduces `love.update(dt)` in depth -- delta time, frame-independent movement, keyboard input, and building your first interactive simulation. You will go from static pixels to a player character you can steer around the screen.
+**[Module 1: The Game Loop Trinity](module-01-game-loop-trinity.md)** introduces `love.update(dt)` in depth -- delta time, frame-independent movement, keyboard input, and building your first interactive simulation. You will go from static pixels to a player character you can steer around the screen.
 
 [Back to LOVE2D Learning Roadmap](love2d-learning-roadmap.md)

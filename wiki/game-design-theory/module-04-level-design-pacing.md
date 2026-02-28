@@ -344,6 +344,6 @@ Draw top-down or side-view sketches. Mark player spawn, exit, hazards, and visua
 
 You now understand how to structure a player's journey through space and time. Take these principles into related domains:
 
-- **[Module 7: Game Balance & Economy](module-07-game-balance-economy.md)** — How pacing intersects with progression systems, difficulty curves, and reward timing. Balance is the mathematical backbone of the emotional arcs you're designing.
-- **[Module 9: Narrative Design & Storytelling](module-09-narrative-design-storytelling.md)** — How level design and environmental storytelling integrate with dialogue, plot structure, and player agency in narrative.
-- **[Module 6: Game Feel & Juice](module-06-game-feel-juice.md)** — How moment-to-moment feedback (screen shake, hit pause, animation curves) reinforces the spatial and pacing design you've built. Level design is the skeleton; game feel is the flesh.
+- **[Module 5: Game Economy & Resource Design](module-05-game-economy-resource-design.md)** — How pacing intersects with progression systems, difficulty curves, and reward timing. Balance is the mathematical backbone of the emotional arcs you're designing.
+- **[Module 7: Narrative Design & Player Agency](module-07-narrative-design-player-agency.md)** — How level design and environmental storytelling integrate with dialogue, plot structure, and player agency in narrative.
+- **[Module 9: Aesthetics, Feel & Juice](module-09-aesthetics-feel-juice.md)** — How moment-to-moment feedback (screen shake, hit pause, animation curves) reinforces the spatial and pacing design you've built. Level design is the skeleton; game feel is the flesh.

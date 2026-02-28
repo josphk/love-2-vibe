@@ -1908,7 +1908,7 @@ Stretch goal: Write a script that iterates over all GridMap cells and places a t
 
 Your world looks good. Intentionally lit, atmospheric, and populated with real assets. Now it's time to make things move and collide.
 
-**[Module 4: Physics & Character Controllers](module-04-physics-character-controllers.md)** covers:
+**[Module 4: Physics & CharacterBody3D](module-04-physics-characterbody3d.md)** covers:
 - RigidBody3D, StaticBody3D, CharacterBody3D — which to use and when
 - CollisionShape3D and the right shape for each object
 - PhysicsBody layers and masks

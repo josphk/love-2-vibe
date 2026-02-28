@@ -724,4 +724,4 @@ Create a simple tilemap renderer:
 
 ## What's Next?
 
-You have sprites on screen and they animate. The next step is making them interact with the world. [Module 4: Collision Detection & Physics](module-04-collision-detection-physics.md) covers bounding box checks, circle-vs-circle collision, separating axis theorem, and when to use LOVE's built-in Box2D physics versus rolling your own simple collision. Your animated character is about to bump into things.
+You have sprites on screen and they animate. The next step is making them interact with the world. [Module 4: Tilemaps & Levels](module-04-tilemaps-levels.md) covers bounding box checks, circle-vs-circle collision, separating axis theorem, and when to use LOVE's built-in Box2D physics versus rolling your own simple collision. Your animated character is about to bump into things.

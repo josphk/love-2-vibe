@@ -2373,6 +2373,6 @@ Hints:
 
 You now have a full physics toolkit: bodies, colliders, forces, events, sensors, joints, and raycasting. Your objects have weight, momentum, and consequences.
 
-**[Module 5: 3D Models, Animation & Assets](module-05-models-animation-assets.md)** teaches you to load GLTF models, play skeletal animations, manage asset loading with Suspense, and integrate animated models with the physics system you just learned. Your Rube Goldberg machine used primitive shapes -- now you'll replace them with real 3D art.
+**[Module 5: Game Architecture & State](module-05-game-architecture-state.md)** teaches you to load GLTF models, play skeletal animations, manage asset loading with Suspense, and integrate animated models with the physics system you just learned. Your Rube Goldberg machine used primitive shapes -- now you'll replace them with real 3D art.
 
 [Back to R3F Game Dev Learning Roadmap](r3f-gamedev-learning-roadmap.md)

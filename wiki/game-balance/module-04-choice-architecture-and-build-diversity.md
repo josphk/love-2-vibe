@@ -444,4 +444,4 @@ You have a pool of 40 upgrades: 10 fire, 10 ice, 10 lightning, 10 generic. The p
 - **"The Binding of Isaac" item pool design** — Edmund McMillen has discussed the design of 700+ items across multiple pools. The pool-based offering system with transformation bonuses is a masterclass in synergy design at scale.
 - **"Build Diversity in Path of Exile"** — Grinding Gear Games has published extensively on how they design and measure build diversity. Their approach of creating 100+ skills with distinct mechanics is an extreme case study.
 - **[Module 2: Power Budgets](module-02-power-budgets-and-stat-allocation.md)** — budget enforcement is the foundation of preventing dominance.
-- **[Game Design Theory Module 2: Player Psychology](../game-design-theory/module-02-player-psychology-motivation.md)** — covers player motivation and decision-making psychology.
+- **[Game Design Theory Module 3: Player Psychology](../game-design-theory/module-03-player-psychology-motivation.md)** — covers player motivation and decision-making psychology.

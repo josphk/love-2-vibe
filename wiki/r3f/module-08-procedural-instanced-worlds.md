@@ -2628,6 +2628,6 @@ Hints:
 
 You've built a world that generates itself. Now you need things to live in it.
 
-**[Module 9: ECS & State Management](module-09-ecs-state-management.md)** introduces the Entity-Component-System pattern for managing game objects at scale — enemies, items, NPCs, and all the dynamic entities that populate your procedural world. You'll wire up Zustand for global game state, build an event bus for decoupled communication, and learn when to use React state vs game-engine-style ECS.
+**[Module 9: Audio & Game Feel](module-09-audio-game-feel.md)** introduces the Entity-Component-System pattern for managing game objects at scale — enemies, items, NPCs, and all the dynamic entities that populate your procedural world. You'll wire up Zustand for global game state, build an event bus for decoupled communication, and learn when to use React state vs game-engine-style ECS.
 
 [Back to R3F Game Dev Learning Roadmap](r3f-gamedev-learning-roadmap.md)

@@ -2015,7 +2015,7 @@ func shake_camera(duration: float) -> void:
 
 The world looks beautiful. Now let's make it infinite.
 
-**[Module 8: Procedural Generation & Instancing](module-08-procedural-generation-instancing.md)** covers terrain generation with noise, multimesh instancing for dense foliage, runtime mesh construction, and the tools that let you build worlds that are different every time the player loads in. All those post-processing tricks you just learned work directly on procedurally generated worlds — the Environment resource doesn't care whether your geometry was hand-placed or generated at runtime.
+**[Module 8: Procedural & Instanced Worlds](module-08-procedural-instanced-worlds.md)** covers terrain generation with noise, multimesh instancing for dense foliage, runtime mesh construction, and the tools that let you build worlds that are different every time the player loads in. All those post-processing tricks you just learned work directly on procedurally generated worlds — the Environment resource doesn't care whether your geometry was hand-placed or generated at runtime.
 
 ---
 

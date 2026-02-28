@@ -855,7 +855,7 @@ Ludum Dare runs twice a year (April and October). GMTK runs once (typically Augu
 
 ### The Godot Path
 
-If you want to keep the procedural generation and ECS patterns but get a visual editor, Godot 4 is the natural next step. Your LÖVE experience means you will breeze through the basics. The new territory is the scene tree and the editor. See [wiki/godot](../godot/) for the parallel wiki series.
+If you want to keep the procedural generation and ECS patterns but get a visual editor, Godot 4 is the natural next step. Your LÖVE experience means you will breeze through the basics. The new territory is the scene tree and the editor. See [wiki/godot](../godot/godot4-gamedev-learning-roadmap) for the parallel wiki series.
 
 ### Resources
 
