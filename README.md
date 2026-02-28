@@ -142,6 +142,23 @@ All six games share common design principles despite being different genres:
 - **Particle systems** — lightweight table-based particles, no LÖVE ParticleSystem
 - **Data-driven enemies** — type definitions are plain tables; adding a new enemy is just a new table entry
 
+## Wiki
+
+The `wiki/` directory contains a [VitePress](https://vitepress.dev) knowledge base covering game design and development topics.
+
+```bash
+cd wiki
+npm install    # first time only
+npm run dev    # start dev server at http://localhost:5173
+```
+
+To build for production:
+
+```bash
+npm run build
+npm run preview  # preview the production build
+```
+
 ## Tech
 
 - **Language:** Lua
