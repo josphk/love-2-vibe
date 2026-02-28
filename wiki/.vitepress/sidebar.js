@@ -75,6 +75,7 @@ const topics = {
   'ecs': 'ECS',
   'glsl': 'GLSL Shaders',
   'game-ai': 'Game AI',
+  'game-balance': 'Game Balance',
   'gas': 'Gameplay Ability System',
   'rive': 'Rive',
   'sound-design': 'Sound Design',
