@@ -1510,6 +1510,200 @@ For the diffuse (requires light() — note that Visual Shaders also support ligh
 
 ---
 
+## 2D Bridge: Canvas Item Shaders and Stylized 2D Art
+
+> **Context shift.** The 3D section covers `shader_type spatial` — shaders that run on 3D geometry. In 2D, the equivalent is `shader_type canvas_item`. It's a simpler model (sprites instead of meshes, one `COLOR` output instead of PBR channels) but all the concepts — uniforms, UV manipulation, noise, TIME — transfer directly. This is the highest-leverage module for a graphic designer: canvas_item shaders let you apply professional visual effects to any sprite in the dungeon.
+
+### canvas_item vs spatial: What Changes
+
+| Concept | `spatial` | `canvas_item` |
+|---|---|---|
+| Shader type declaration | `shader_type spatial;` | `shader_type canvas_item;` |
+| Output | `ALBEDO`, `ROUGHNESS`, `EMISSION` | `COLOR` (vec4 including alpha) |
+| Vertex position | `VERTEX` (vec3) | `VERTEX` (vec2) |
+| UV | `UV` | `UV` (same) |
+| Texture access | Declare `uniform sampler2D` | `TEXTURE` built-in (the sprite's own texture) |
+| Texture pixel size | `1.0 / textureSize(...)` | `TEXTURE_PIXEL_SIZE` built-in |
+| Screen UV | `SCREEN_UV` | `SCREEN_UV` (same) |
+| Time | `TIME` | `TIME` (same) |
+| Lighting | `light()` function | `light()` function (uses 2D lights) |
+| Normal output | `NORMAL` | `NORMAL_MAP` + `NORMAL_MAP_DEPTH` |
+
+The biggest practical difference: `COLOR` is a `vec4` where the alpha channel controls transparency. In `spatial`, transparency requires setting `ALPHA` explicitly. In `canvas_item`, any pixel with `COLOR.a = 0.0` is fully transparent.
+
+**`TEXTURE` is free.** You don't declare it — it's automatically the sprite's texture. This is the most common source of confusion when coming from spatial shaders.
+
+### The Minimal canvas_item Shader
+
+Every canvas_item shader starts here:
+
+```glsl
+shader_type canvas_item;
+
+void fragment() {
+    vec4 tex = texture(TEXTURE, UV);
+    COLOR = tex;  // identity shader — passes the sprite through unchanged
+}
+```
+
+Assign this to a Sprite2D via `ShaderMaterial` (same workflow as spatial: create a `ShaderMaterial` resource, assign a `Shader` to it, assign the `ShaderMaterial` to the Sprite2D).
+
+### Sprite Outline Shader
+
+One of the most commonly needed 2D effects. Samples neighboring pixels — where neighbors exist but the current pixel is transparent, draw the outline color.
+
+```glsl
+shader_type canvas_item;
+
+uniform vec4 outline_color : source_color = vec4(0.0, 0.0, 0.0, 1.0);
+uniform float outline_width : hint_range(0.0, 10.0, 1.0) = 1.0;
+
+void fragment() {
+    vec2 size = TEXTURE_PIXEL_SIZE * outline_width;
+    vec4 tex = texture(TEXTURE, UV);
+
+    // Sample 4 neighbors
+    float neighbor_alpha = 0.0;
+    neighbor_alpha = max(neighbor_alpha, texture(TEXTURE, UV + vec2( size.x,  0.0   )).a);
+    neighbor_alpha = max(neighbor_alpha, texture(TEXTURE, UV + vec2(-size.x,  0.0   )).a);
+    neighbor_alpha = max(neighbor_alpha, texture(TEXTURE, UV + vec2( 0.0,     size.y)).a);
+    neighbor_alpha = max(neighbor_alpha, texture(TEXTURE, UV + vec2( 0.0,    -size.y)).a);
+
+    // Draw outline where neighbors are opaque but this pixel is not
+    float outline = neighbor_alpha * (1.0 - tex.a);
+    COLOR = mix(tex, vec4(outline_color.rgb, outline), outline);
+}
+```
+
+`TEXTURE_PIXEL_SIZE` is `1.0 / texture_resolution` — it ensures the outline width is consistent regardless of sprite resolution. An `outline_width` of `1.0` means exactly 1 pixel.
+
+Compare to the 3D inverted hull outline from Section 6 above: that technique requires geometry to inflate. Sprites have no geometry, so the neighbor-sampling approach is used instead — completely different implementation, same visual result.
+
+### Palette Swap Shader
+
+A defining technique for top-down RPGs — recolor enemy variants, color equipment, or tint characters by team without creating separate sprite assets.
+
+**Gradient remap approach** (most flexible for a designer):
+
+```glsl
+shader_type canvas_item;
+
+uniform sampler2D palette : filter_nearest;
+uniform float mix_amount : hint_range(0.0, 1.0) = 1.0;
+
+void fragment() {
+    vec4 tex = texture(TEXTURE, UV);
+    // Convert sprite pixel to luminance (grayscale)
+    float luminance = dot(tex.rgb, vec3(0.299, 0.587, 0.114));
+    // Sample the palette texture at that luminance position
+    vec4 palette_color = texture(palette, vec2(luminance, 0.0));
+    // Blend between original and remapped color
+    COLOR = vec4(mix(tex.rgb, palette_color.rgb, mix_amount * tex.a), tex.a);
+}
+```
+
+**Create palette textures as 1-pixel-tall gradient PNGs:**
+- In Photoshop/Affinity: create a 256×1 canvas, fill with a gradient from dark→mid→light in your target color
+- Export as PNG
+- In Godot: import with Filter = Nearest (critical — prevents interpolation between palette colors)
+- Assign to the `palette` uniform
+
+Design variants: the sprite stays grayscale in the source art. The palette texture defines the coloring. Enemy goblins can all share one sprite sheet but use different `palette` textures for green goblins, blue ice goblins, red fire goblins — all from a single shader uniform change.
+
+### Dissolve Effect on Sprites
+
+Direct port of the 3D dissolve shader from Section 7 above. The structure is nearly identical:
+
+```glsl
+shader_type canvas_item;
+
+uniform sampler2D noise_texture : hint_default_white;
+uniform float dissolve_amount : hint_range(0.0, 1.0) = 0.0;
+uniform float edge_width : hint_range(0.0, 0.2) = 0.05;
+uniform vec3 edge_color : source_color = vec3(1.0, 0.4, 0.0);
+
+void fragment() {
+    vec4 tex = texture(TEXTURE, UV);
+    float noise = texture(noise_texture, UV).r;
+
+    if (noise < dissolve_amount) {
+        discard;  // discard works in canvas_item exactly like in spatial
+    }
+
+    float edge = 1.0 - smoothstep(dissolve_amount, dissolve_amount + edge_width, noise);
+    COLOR = vec4(mix(tex.rgb, edge_color, edge * tex.a), tex.a);
+}
+```
+
+The only changes from the spatial version: `COLOR` instead of `ALBEDO`/`EMISSION`, and the alpha is carried through manually. `discard` works identically.
+
+Animate `dissolve_amount` from `0.0` to `1.0` in an AnimationPlayer track to create an enemy death effect. Wire it to the `hurt` or `die` state in your AnimationTree state machine.
+
+### Water and Distortion Shader
+
+Animate UV coordinates with `TIME` to create water surface ripple:
+
+```glsl
+shader_type canvas_item;
+
+uniform float wave_strength : hint_range(0.0, 0.05) = 0.015;
+uniform float wave_speed : hint_range(0.0, 10.0) = 2.5;
+uniform float wave_frequency : hint_range(0.0, 50.0) = 12.0;
+
+void fragment() {
+    vec2 distorted_uv = UV;
+    distorted_uv.x += sin(UV.y * wave_frequency + TIME * wave_speed) * wave_strength;
+    distorted_uv.y += cos(UV.x * wave_frequency + TIME * wave_speed) * wave_strength;
+    COLOR = texture(TEXTURE, distorted_uv);
+}
+```
+
+Apply this to a Sprite2D or a dedicated TileMapLayer sitting on top of the ground layer with a semi-transparent water texture. In the dungeon, use it for a small pond or puddle layer.
+
+For a more convincing effect, extend the shader to output a `NORMAL_MAP` so the pond catches PointLight2D torchlight. Add a `uniform sampler2D normal_texture;` and set `NORMAL_MAP = texture(normal_texture, distorted_uv).rgb;` after the `COLOR` line. Without that output, PointLight2D treats the surface as flat regardless of any normal map on the texture.
+
+### Sprite Normal Maps and 2D Lighting Interaction
+
+This is where your graphic design skills create direct visual value. A normal map tells `PointLight2D` how to shade each pixel of a sprite — without one, lighting is flat. With one, stone walls have depth, wooden crates have grain, and characters have volume.
+
+**Workflow:**
+
+1. Select your Sprite2D
+2. Change the **Texture** property to `New CanvasTexture`
+3. In the CanvasTexture: set **Diffuse Texture** to your sprite PNG, **Normal Texture** to your normal map PNG
+4. Place `PointLight2D` torches in the scene — they'll now shade the sprite using the normal map
+
+**Generating normal maps:**
+
+| Tool | Best For | Notes |
+|---|---|---|
+| Laigter (free) | Pixel art sprites | Drag and drop, real-time preview, exports normal + specular |
+| SpriteIlluminator (paid) | Any 2D art | Fast, high quality, batch processing |
+| Photoshop | Painted / HD art | Filter > 3D > Generate Normal Map |
+| Hand-painted | Stylized pixel art | Full control, paint in any 3-channel PNG editor |
+
+**Design note:** For pixel art, Laigter's results look excellent with minimal effort. For painted characters, Photoshop's normal map generator plus manual touch-up gives professional results. The CanvasTexture normal map slot is the same `Texture2D` type as everything else — import it with Filter = Nearest for pixel art.
+
+### The Visual Shader Editor for canvas_item
+
+The visual shader editor works for canvas_item shaders too. In the Shader editor, create a new `VisualShader` and set its mode to `CanvasItem`. All the same node categories are available (Texture, Math, Vector, Color, etc.) with the built-in `TEXTURE` node available automatically for canvas_item mode.
+
+For a graphic designer who prefers visual workflows over code, this is often the faster path. The outline and dissolve shaders above can be recreated node-by-node in the visual editor.
+
+### Try It: Stylize the Dungeon
+
+With the dungeon from Modules 3 and 4:
+
+1. Add the **outline shader** to the player `Sprite2D` — black outline at width 1.0
+2. Add the **palette swap shader** to a goblin enemy sprite — create a second palette texture in a different hue for a variant
+3. Add the **dissolve shader** to a destructible barrel — animate `dissolve_amount` from 0 to 1 when the barrel is destroyed
+4. Add the **water shader** to a small pond Sprite2D placed over the ground tilemap
+5. Add a **CanvasTexture** with a normal map to the wall tiles' Sprite2D — place a PointLight2D torch nearby and observe the depth
+
+The dungeon should now look visually styled: outlined protagonist, color-variant enemies, dissolving destructibles, rippling water, depth-lit walls.
+
+---
+
 ## API Quick Reference
 
 ### Built-In Shader Variables

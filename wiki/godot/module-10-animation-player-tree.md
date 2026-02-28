@@ -1835,6 +1835,292 @@ Duration: 0.9s, Loop: disabled
 
 ---
 
+## 2D Bridge: Sprite Animation and 2D State Machines
+
+> **Context shift.** The 3D section animates skeletal rigs with Mixamo clips, root motion, and blend spaces. 2D sprite animation is fundamentally different: you're switching between frames of a sprite sheet, not interpolating bone transforms. This bridge covers the two tools Godot provides for this — `AnimatedSprite2D` and `AnimationPlayer` — and how to combine them into a full RPG character state machine.
+
+### AnimatedSprite2D vs AnimationPlayer: The Core Decision
+
+Two tools, different purposes, often used together:
+
+| | `AnimatedSprite2D` | `AnimationPlayer` |
+|---|---|---|
+| **What it animates** | Sprite frames (the art) | Any property on any node |
+| **Best for** | Walk cycles, idle loops, attack swings | Screen flash, camera shake, chest opening, sound cues |
+| **Timeline** | Simple: frame index over time | Full keyframe editor with multiple tracks |
+| **Triggering** | `play("walk")` from code | `play("hit_flash")` from code |
+| **Signals** | `animation_finished`, `frame_changed` | `animation_finished`, method call tracks |
+
+**Use both on the same node.** `AnimatedSprite2D` handles the frame cycling; `AnimationPlayer` handles effects layered on top (color flash, position shake, particles trigger). They run independently and don't interfere.
+
+### Setting Up AnimatedSprite2D
+
+1. Add an `AnimatedSprite2D` node to your player
+2. In the Inspector, click **Sprite Frames** > **New SpriteFrames**
+3. Click the SpriteFrames resource to open the editor at the bottom
+4. Click **Add Animation** and name it `idle`
+5. Click **Add frames from Sprite Sheet** — select your sprite sheet PNG
+6. Set the grid size (e.g. 4 columns × 2 rows for a 4×2 sheet)
+7. Select the frames for the idle animation, click **Add X Frames**
+8. Set FPS (8–12 for pixel art, 24 for HD) and enable Loop
+
+Repeat for `walk_down`, `walk_up`, `walk_side`, `attack`, `hurt`, `die`.
+
+**Suggested sprite sheet layout for top-down RPG characters:**
+```
+Row 0: idle        (4 frames)
+Row 1: walk_down   (6 frames)
+Row 2: walk_up     (6 frames)
+Row 3: walk_side   (6 frames)  ← flip horizontally for left
+Row 4: attack      (5 frames)
+Row 5: hurt        (3 frames)
+Row 6: die         (6 frames)
+```
+
+Export from **Aseprite**: File > Export Sprite Sheet > Layout: Packed or Grid. Use consistent frame size. Check "Trim Cels" off to maintain consistent pixel position across frames.
+
+### Direction-Based Animation from Code
+
+Wire the movement direction to the correct animation:
+
+```gdscript
+# scripts/player.gd (extends CharacterBody2D)
+extends CharacterBody2D
+
+@export var speed: float = 200.0
+@export var acceleration: float = 1500.0
+@export var friction: float = 1200.0
+
+@onready var sprite: AnimatedSprite2D = $AnimatedSprite2D
+
+enum Direction { DOWN, UP, LEFT, RIGHT }
+var facing: Direction = Direction.DOWN
+
+func _physics_process(delta: float) -> void:
+    var input_dir := Input.get_vector("move_left", "move_right", "move_up", "move_down")
+
+    if input_dir != Vector2.ZERO:
+        velocity = velocity.move_toward(input_dir * speed, acceleration * delta)
+        _update_facing(input_dir)
+    else:
+        velocity = velocity.move_toward(Vector2.ZERO, friction * delta)
+
+    move_and_slide()
+    _update_animation()
+
+func _update_facing(input_dir: Vector2) -> void:
+    if abs(input_dir.x) > abs(input_dir.y):
+        facing = Direction.RIGHT if input_dir.x > 0 else Direction.LEFT
+    elif input_dir.y > 0:
+        facing = Direction.DOWN
+    else:
+        facing = Direction.UP
+
+func _update_animation() -> void:
+    var moving := velocity.length() > 10.0
+    match facing:
+        Direction.DOWN:
+            sprite.play("walk_down" if moving else "idle")
+            sprite.flip_h = false
+        Direction.UP:
+            sprite.play("walk_up" if moving else "idle")
+            sprite.flip_h = false
+        Direction.LEFT:
+            sprite.play("walk_side" if moving else "idle")
+            sprite.flip_h = true
+        Direction.RIGHT:
+            sprite.play("walk_side" if moving else "idle")
+            sprite.flip_h = false
+```
+
+### AnimationPlayer for 2D Effects
+
+`AnimationPlayer` works identically in 2D and 3D — it animates any property on any node. Here are the most useful tracks for a top-down RPG:
+
+**Damage flash (red modulate):**
+```
+Animation: "hit_flash" — duration: 0.2s, no loop
+Track 0: Sprite2D:modulate
+  0.00s: Color(1, 1, 1, 1)        ← normal
+  0.05s: Color(1, 0.2, 0.2, 1)   ← red flash
+  0.15s: Color(1, 1, 1, 1)        ← back to normal
+```
+
+**Camera shake on heavy hit:**
+```
+Animation: "camera_shake" — duration: 0.3s, no loop
+Track 0: Camera2D:offset
+  0.00s: Vector2(0, 0)
+  0.05s: Vector2(6, -4)
+  0.10s: Vector2(-5, 3)
+  0.15s: Vector2(4, -2)
+  0.20s: Vector2(-3, 1)
+  0.30s: Vector2(0, 0)
+```
+
+**Torch flicker (authored version of the code script):**
+```
+Animation: "torch_flicker" — duration: 1.0s, loop
+Track 0: PointLight2D:energy  (bezier curve)
+  Keyframes: 1.2, 0.9, 1.4, 1.0, 0.8, 1.3, 1.1 — irregular pattern
+```
+
+**Shader dissolve on enemy death:**
+```
+Animation: "dissolve_death" — duration: 0.8s, no loop
+Track 0: ShaderMaterial:shader_parameter/dissolve_amount
+  0.0s: 0.0
+  0.8s: 1.0
+```
+
+Trigger from code:
+```gdscript
+@onready var anim: AnimationPlayer = $AnimationPlayer
+
+func take_damage(amount: int) -> void:
+    health -= amount
+    anim.play("hit_flash")
+
+func die() -> void:
+    anim.play("dissolve_death")
+    await anim.animation_finished
+    queue_free()
+```
+
+### Code-Driven State Machine for 2D Characters
+
+In 3D, `AnimationTree` is the standard way to manage character animation states — it reads animations from `AnimationPlayer` and blends between skeletal poses. In 2D with frame-based sprites, `AnimationTree` is rarely the right tool. Frame-based animation switches between discrete sprite images — there's nothing to blend between. A walk_down frame and a walk_right frame can't be interpolated like bone transforms can.
+
+The standard 2D approach is a **code-driven state machine** that controls `AnimatedSprite2D` directly. Here's a clean version that handles the full RPG character:
+
+```gdscript
+# scripts/player.gd
+extends CharacterBody2D
+
+@export var speed: float = 200.0
+@export var acceleration: float = 1500.0
+@export var friction: float = 1200.0
+var health: int = 100
+
+enum State { IDLE, WALK, ATTACK, HURT, DIE }
+enum Direction { DOWN, UP, LEFT, RIGHT }
+var state: State = State.IDLE
+var facing: Direction = Direction.DOWN
+
+@onready var sprite: AnimatedSprite2D = $AnimatedSprite2D
+@onready var anim: AnimationPlayer = $AnimationPlayer
+
+func _physics_process(delta: float) -> void:
+    var input_dir := Input.get_vector("move_left", "move_right", "move_up", "move_down")
+
+    # Movement (only in idle/walk states)
+    if state in [State.IDLE, State.WALK]:
+        if input_dir != Vector2.ZERO:
+            velocity = velocity.move_toward(input_dir * speed, acceleration * delta)
+            _update_facing(input_dir)
+            state = State.WALK
+        else:
+            velocity = velocity.move_toward(Vector2.ZERO, friction * delta)
+            if velocity.length() < 10.0:
+                state = State.IDLE
+    elif state == State.ATTACK:
+        velocity = velocity.move_toward(Vector2.ZERO, friction * delta)
+
+    move_and_slide()
+    _update_animation()
+
+func _update_facing(input_dir: Vector2) -> void:
+    if abs(input_dir.x) > abs(input_dir.y):
+        facing = Direction.RIGHT if input_dir.x > 0 else Direction.LEFT
+    elif input_dir.y > 0:
+        facing = Direction.DOWN
+    else:
+        facing = Direction.UP
+
+func _update_animation() -> void:
+    match state:
+        State.IDLE:
+            sprite.play("idle")
+        State.WALK:
+            match facing:
+                Direction.DOWN:
+                    sprite.play("walk_down")
+                    sprite.flip_h = false
+                Direction.UP:
+                    sprite.play("walk_up")
+                    sprite.flip_h = false
+                Direction.LEFT:
+                    sprite.play("walk_side")
+                    sprite.flip_h = true
+                Direction.RIGHT:
+                    sprite.play("walk_side")
+                    sprite.flip_h = false
+        State.ATTACK:
+            sprite.play("attack")
+        State.HURT:
+            sprite.play("hurt")
+        State.DIE:
+            sprite.play("die")
+
+func _unhandled_input(event: InputEvent) -> void:
+    if event.is_action_pressed("attack") and state in [State.IDLE, State.WALK]:
+        state = State.ATTACK
+        sprite.play("attack")
+        await sprite.animation_finished
+        state = State.IDLE
+
+func take_damage(amount: int) -> void:
+    if state == State.DIE:
+        return
+    health -= amount
+    anim.play("hit_flash")  # AnimationPlayer handles the visual effect
+    if health <= 0:
+        state = State.DIE
+        sprite.play("die")
+        await sprite.animation_finished
+        queue_free()
+    else:
+        state = State.HURT
+        sprite.play("hurt")
+        await sprite.animation_finished
+        state = State.IDLE
+```
+
+This is cleaner than an AnimationTree for frame-based sprites. The `enum State` + `match` pattern gives you explicit control over which states can transition to which, and `await sprite.animation_finished` handles one-shot animations (attack, hurt, die) without timers or callback signals.
+
+`AnimationPlayer` handles effects that layer on top — the `hit_flash` modulate track, camera shake, dissolve shader animation. `AnimatedSprite2D` handles the frame cycling. They work independently and don't interfere.
+
+### When AnimationTree IS Useful in 2D
+
+AnimationTree works in 2D when you use `AnimationPlayer` for all animation (including frame cycling) instead of `AnimatedSprite2D`. Create AnimationPlayer animations that keyframe `Sprite2D.frame` over time, then wire AnimationTree to that AnimationPlayer. This approach trades the simplicity of `AnimatedSprite2D.play()` for AnimationTree's state machine editor. It's more setup, but it gives you the visual state machine graph if you prefer that workflow.
+
+Godot also has `Skeleton2D` and `Bone2D` for 2D skeletal animation — separate limbs rather than frame-swapped sprites (think Cuphead). AnimationTree with BlendSpace2D makes sense there, since bone poses can actually be interpolated. That's a different workflow from frame-based sprites and beyond what you need for a top-down RPG.
+
+### 2D vs 3D Animation: Key Differences
+
+**Root motion** doesn't exist in 2D sprite animation. In 3D, the animation can move the character's root bone and the `CharacterBody3D` reads that displacement. In 2D, movement is always code-driven — `velocity` in `_physics_process` controls position, the walk animation just cycles legs in place.
+
+**No retargeting or Mixamo.** The 2D equivalent of browsing Mixamo is downloading sprite sheets from Itch.io, Kenney, or the LPC Character Generator — or drawing your own.
+
+### Try It: Animated Walking Character
+
+With the dungeon from Modules 3 and 4 (~30 minutes):
+
+1. Replace the placeholder `Sprite2D` on the player with an `AnimatedSprite2D`
+2. Set up SpriteFrames with idle, walk_down, walk_up, walk_side animations (use any free RPG sprite sheet)
+3. Wire movement direction to animation using `_update_animation()` above
+4. Walk around the dungeon — the character should animate directionally
+
+### Try It: Combat and Effects (~45 minutes)
+
+5. Add an `AnimationPlayer` with a `hit_flash` animation (modulate track from the section above)
+6. Add the attack state and `_unhandled_input` handler — press attack, watch the animation play, then return to idle
+7. Add `take_damage()` with hurt/die states and the `dissolve_death` AnimationPlayer animation + shader from Module 6's bridge on an enemy
+
+The result: a character that animates directionally while moving, flashes red when damaged, plays attack and hurt animations with proper state transitions, and enemies that dissolve on death. The dungeon room is now a functional top-down RPG prototype.
+
+---
+
 ## API Quick Reference
 
 ### AnimationPlayer

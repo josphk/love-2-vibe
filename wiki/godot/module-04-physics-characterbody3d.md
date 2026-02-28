@@ -1574,6 +1574,219 @@ Trigger (Area3D):          layer=4, mask=3 (detects physics objects)
 
 ---
 
+## 2D Bridge: Top-Down Physics and CharacterBody2D
+
+> **Context shift.** The 3D section's movement system is built around gravity, jumping, and 3D space. A top-down RPG looks straight down — no gravity, no jumping, just 8-directional movement on a flat plane. This simplifies the physics code considerably. This bridge upgrades the Module 3 dungeon room with a proper physics-based player.
+
+### The Key Difference: No Gravity in Top-Down
+
+The 3D movement template opens with:
+```gdscript
+if not is_on_floor():
+    velocity += get_gravity() * delta
+```
+
+In a top-down RPG, delete this entirely. You're not simulating falling — the player slides around a flat map. There's no `is_on_floor()`, no `jump_velocity`, no coyote time. The only forces are player input and friction.
+
+This means the movement code is shorter and simpler than the 3D equivalent, but getting it to *feel* good requires explicit acceleration and friction instead of relying on gravity to do work for you.
+
+### CharacterBody2D: The Top-Down Movement Template
+
+Replace the simple `position +=` script from Module 0's bridge with this. Attach it to a `CharacterBody2D` node:
+
+```gdscript
+# scripts/player.gd
+extends CharacterBody2D
+
+@export var speed: float = 200.0
+@export var acceleration: float = 1500.0
+@export var friction: float = 1200.0
+
+func _physics_process(delta: float) -> void:
+    var input_dir := Input.get_vector("move_left", "move_right", "move_up", "move_down")
+
+    if input_dir != Vector2.ZERO:
+        velocity = velocity.move_toward(input_dir * speed, acceleration * delta)
+    else:
+        velocity = velocity.move_toward(Vector2.ZERO, friction * delta)
+
+    move_and_slide()
+```
+
+The `move_toward()` approach gives the character weight — it accelerates into movement and decelerates to a stop instead of snapping instantly. This feels much better for analog stick input and gives the player a sense of momentum.
+
+`move_and_slide()` is identical to the 3D version — it moves the body and handles collision response automatically. No up_direction needed for top-down.
+
+### Facing Direction and Sprite Flipping
+
+Top-down characters need to face the direction they're moving. Two approaches:
+
+**Simple: Horizontal flip for left/right**
+```gdscript
+@onready var sprite: Sprite2D = $Sprite2D
+
+func _physics_process(delta: float) -> void:
+    # ... movement code above ...
+    if velocity.x != 0:
+        sprite.flip_h = velocity.x < 0
+```
+
+**Better: Track facing direction for 4-directional animation**
+```gdscript
+enum Direction { DOWN, UP, LEFT, RIGHT }
+var facing: Direction = Direction.DOWN
+
+func _update_facing(input_dir: Vector2) -> void:
+    if input_dir == Vector2.ZERO:
+        return
+    if abs(input_dir.x) > abs(input_dir.y):
+        facing = Direction.RIGHT if input_dir.x > 0 else Direction.LEFT
+    else:
+        facing = Direction.DOWN if input_dir.y > 0 else Direction.UP
+```
+
+Pass `facing` to your AnimatedSprite2D to play the correct directional animation. Module 10's bridge covers the full animation state machine.
+
+### 2D Physics Body Types
+
+The same four types exist in 2D, just with the `2D` suffix:
+
+| 3D Node | 2D Node | Use For |
+|---|---|---|
+| `StaticBody3D` | `StaticBody2D` | Walls, floors, immovable obstacles |
+| `RigidBody3D` | `RigidBody2D` | Pushable crates, physics props |
+| `CharacterBody3D` | `CharacterBody2D` | Player, NPCs |
+| `AnimatableBody3D` | `AnimatableBody2D` | Moving platforms, traps |
+
+The APIs mirror the 3D versions. `RigidBody2D` has `linear_velocity`, `apply_impulse()`, `apply_force()`. `CharacterBody2D` has `velocity` and `move_and_slide()`. `Area2D` emits `body_entered` and `body_exited`. All the 3D concepts transfer directly.
+
+### CollisionShape2D and the Feet Trick
+
+2D collision shapes:
+
+| 3D Shape | 2D Shape |
+|---|---|
+| `BoxShape3D` | `RectangleShape2D` |
+| `SphereShape3D` | `CircleShape2D` |
+| `CapsuleShape3D` | `CapsuleShape2D` |
+| `ConvexPolygonShape3D` | `ConvexPolygonShape2D` |
+| `ConcavePolygonShape3D` | `ConcavePolygonShape2D` (static only) |
+
+**The feet trick (essential for top-down):**
+
+In a top-down RPG, the character sprite is drawn from a slightly elevated angle. The feet should collide with walls, but the head can visually overlap them (it's "behind" or "in front" depending on Y-sorting).
+
+Place the CollisionShape2D at the **bottom** of the sprite, not centered:
+
+```
+Player (CharacterBody2D)
+├── Sprite2D                   ← centered on node, full character height
+├── CollisionShape2D           ← small circle, offset downward
+│   └── Shape: CircleShape2D, radius: 6
+│   └── Position: (0, 8)       ← shifted to the character's feet
+└── Camera2D
+```
+
+This lets the character's torso visually overlap walls and other objects, which reads as "walking behind" them. Combined with **Y-sorting** (CanvasItem > Y Sort Enabled: true on the parent), sprites automatically draw in correct depth order based on their Y position — characters below a wall tile draw in front of it.
+
+### Area2D: Pickups, Triggers, and Damage Zones
+
+Identical to Area3D, just flat. Here's a gem pickup for the RPG:
+
+```gdscript
+# scripts/pickup.gd
+extends Area2D
+
+signal collected(item_name: String, value: int)
+
+@export var item_name: String = "gem"
+@export var point_value: int = 10
+
+func _ready() -> void:
+    body_entered.connect(_on_body_entered)
+
+func _on_body_entered(body: Node2D) -> void:
+    if body is CharacterBody2D:
+        collected.emit(item_name, point_value)
+        queue_free()
+```
+
+The code is nearly identical to the 3D Area3D example — only the type hint changes from `Node3D` to `Node2D`. This is Godot's 2D/3D parity in action.
+
+Scene tree for the pickup:
+```
+Gem (Area2D)
+├── Sprite2D          ← gem art
+└── CollisionShape2D  ← small circle
+```
+
+Connect the `collected` signal to your player or game manager via the Signal Bus pattern from Module 5.
+
+### RayCast2D: Interact With Objects in Front of the Player
+
+Use a `RayCast2D` to implement the classic "press E to interact with what you're facing":
+
+```gdscript
+# In player.gd
+@onready var interact_ray: RayCast2D = $InteractRay
+
+const INTERACT_DIRECTIONS: Dictionary = {
+    Direction.DOWN:  Vector2(0, 1),
+    Direction.UP:    Vector2(0, -1),
+    Direction.LEFT:  Vector2(-1, 0),
+    Direction.RIGHT: Vector2(1, 0),
+}
+
+func _physics_process(delta: float) -> void:
+    # ... movement code ...
+    interact_ray.target_position = INTERACT_DIRECTIONS[facing] * 24.0
+
+func _unhandled_input(event: InputEvent) -> void:
+    if event.is_action_pressed("interact"):
+        if interact_ray.is_colliding():
+            var target := interact_ray.get_collider()
+            if target.has_method("interact"):
+                target.interact()
+```
+
+Set the RayCast2D's collision mask to hit only the "Interactables" layer so it ignores walls and enemies.
+
+### Collision Layers for a Top-Down RPG
+
+Suggested layer setup (in Project Settings > Layer Names > 2D Physics):
+
+```
+Layer 1:  World          ← walls, floors (StaticBody2D)
+Layer 2:  Player         ← player CharacterBody2D
+Layer 3:  Enemies        ← enemy CharacterBody2D
+Layer 4:  Pickups        ← gem/heart Area2D
+Layer 5:  Interactables  ← chest/NPC Area2D
+Layer 6:  Projectiles    ← arrows, spells
+```
+
+Node mask assignments:
+```
+Player:        layer=2, mask=1+3+5   (hits world, enemies, interactables)
+Enemy:         layer=3, mask=1+2+3   (hits world, player, other enemies)
+Pickup:        layer=4, mask=2       (detects player only)
+Interactable:  layer=5, mask=0       (detected by raycasts, not physics)
+Projectile:    layer=6, mask=1+3     (hits world and enemies)
+```
+
+### Try It: Walkable Dungeon
+
+1. Take the dungeon room from Module 3's bridge
+2. Replace the Module 0 `Node2D` player with a `CharacterBody2D`
+3. Add `CollisionShape2D` (circle, at the feet position)
+4. Attach the movement script above
+5. Make sure wall tiles have collision shapes set in the TileSet editor
+6. Add 3 `Area2D` gem pickups with the pickup script
+7. Add a `RayCast2D` for interaction and a chest that responds to `interact()`
+
+The player should now collide with walls, collect gems, and interact with the chest. Module 6's bridge will add visual shaders on top; Module 10's bridge will add animation.
+
+---
+
 ## API Quick Reference
 
 ### CharacterBody3D

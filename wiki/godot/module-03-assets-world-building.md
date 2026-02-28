@@ -1297,6 +1297,241 @@ func _input(event: InputEvent) -> void:
 
 ---
 
+## 2D Bridge: Sprites, Tiles, and 2D World Building
+
+> **Context shift.** The 3D section builds environments with imported GLB meshes, PBR materials, and GridMap. In 2D, the equivalent is sprites, sprite sheets, and TileMapLayer. This section builds the dungeon room that the rest of the 2D bridges will use. It leans into visual craft — this is where your graphic design skills transfer directly into game art.
+
+### The 2D Asset Pipeline
+
+Where 3D uses GLTF/GLB files, 2D uses **PNG sprite sheets** and **individual PNGs**. Godot supports PNG, WebP, SVG, and a few others. PNG is the standard.
+
+**Free 2D asset packs for top-down RPG:**
+- [Kenney.nl](https://kenney.nl/assets) — huge library, consistent style, CC0 license
+- [Kenney Tiny Dungeon](https://kenney.nl/assets/tiny-dungeon) — tileset + characters, perfect starting point
+- [LPC Character Generator](https://sanderfrenken.github.io/Universal-LPC-Spritesheet-Character-Generator/) — customizable top-down characters
+- [Itch.io free assets](https://itch.io/game-assets/free/tag-top-down) — filtered for top-down RPG
+- [OpenGameArt.org](https://opengameart.org) — mixed quality, many CC0
+
+Download a pack, drop it in your project's `assets/sprites/` folder, and Godot imports everything automatically.
+
+**Recommended project folder layout for 2D:**
+```
+assets/
+├── sprites/          ← individual sprite PNGs
+├── spritesheets/     ← grid-based animation sheets
+├── tilesets/         ← tileset PNGs + .tres TileSet resources
+└── ui/               ← UI textures
+```
+
+### Sprite Sheets and Texture Atlases
+
+A **sprite sheet** packs multiple frames into one PNG. Two ways to use them in Godot:
+
+**Option 1: Sprite2D with region (static sprites)**
+```gdscript
+# In the inspector:
+# Sprite2D > Region > Enabled: true
+# Sprite2D > Region > Rect: x=0, y=0, w=16, h=16  (one tile from a sheet)
+```
+
+**Option 2: Sprite2D with Hframes/Vframes (frame cycling)**
+```gdscript
+# For a 4x2 grid sheet (4 columns, 2 rows):
+# Sprite2D > Animation > Hframes: 4
+# Sprite2D > Animation > Vframes: 2
+# Sprite2D > Animation > Frame: 0  ← which frame to show
+
+@onready var sprite: Sprite2D = $Sprite2D
+
+func _process(delta: float) -> void:
+    # Manually cycle frames — AnimatedSprite2D handles this automatically
+    sprite.frame = (sprite.frame + 1) % (sprite.hframes * sprite.vframes)
+```
+
+For animation, you'll almost always use **AnimatedSprite2D** instead (covered in Module 10's bridge). The Hframes/Vframes approach is useful for static sprites cut from a sheet.
+
+### An Art Director's Checklist for 2D Game Sprites
+
+As a graphic designer, you'll be tempted to bring your full production toolkit. Here's what actually matters in Godot:
+
+**Consistency first:**
+- Pick one pixel density and stick to it. If your character is 16×16, all characters should be 16×16 at the same scale. Mixing resolutions destroys visual coherence.
+- Decide your game's canvas size upfront. Common top-down sizes: 320×180 (pixel art), 640×360, 1280×720 (HD).
+
+**Silhouette readability:**
+- Design sprites so their silhouette reads at the final zoom level, not at 1:1 pixel scale.
+- Play-test at actual game zoom. A 16px sprite zoomed 4x looks very different on a 1920×1080 display.
+
+**Color palette discipline:**
+- 4–8 color palettes per character creates visual cohesion and enables palette swapping (covered in Module 6's bridge).
+- Tools: [Lospec Palette List](https://lospec.com/palette-list) for curated pixel art palettes.
+
+**Export settings from common tools:**
+| Tool | Export Setting |
+|---|---|
+| Aseprite | File > Export Sprite Sheet. PNG, indexed color for pixel art, RGBA for HD |
+| Photoshop | Save for Web (Legacy). PNG-24, no interlacing, transparency on |
+| Affinity Designer | Export > PNG, Resolution matches canvas DPI |
+| Figma | Export frame as PNG, 1x scale |
+
+**Pre-multiplied alpha:** Godot handles both, but pre-multiplied alpha from Photoshop can cause fringing artifacts on sprites. If you see dark halos around sprites, export as straight alpha (most tools call it "normal" alpha).
+
+### TileMapLayer: The 2D GridMap
+
+**TileMapLayer** is the 2D equivalent of **GridMap** from Section 7. It lets you paint tiles onto a grid to build levels visually in the editor.
+
+**Setup workflow:**
+1. Add a **TileMapLayer** node to your scene
+2. In the Inspector, click **Tile Set** > New TileSet
+3. Click the TileSet resource to open the TileSet editor at the bottom of the screen
+4. Click the **+** button and select your tileset PNG. Set tile size (e.g. 16×16)
+5. The editor auto-slices the sheet into tiles. Review and confirm.
+6. Back in the scene, click the TileMapLayer node — the tile palette appears. Paint tiles.
+
+**Using multiple layers for depth:**
+```
+DungeonRoom (Node2D)
+├── TileMapLayer (Ground)    ← floor tiles, no collision, Z-index: 0
+├── TileMapLayer (Walls)     ← wall tiles WITH collision, Z-index: 1
+└── TileMapLayer (Decor)     ← rugs, cracks, details, Z-index: 2
+```
+
+Each TileMapLayer is a separate node. Stack them to build depth without a 3D camera.
+
+**Adding collision to wall tiles:**
+In the TileSet editor, select a wall tile > **Physics** tab > draw a collision polygon (usually the full tile rectangle). Now TileMapLayer automatically generates collision for every wall tile you paint. No need to manually place CollisionShape2D nodes.
+
+**Terrain autotiles (smart connections):**
+In the TileSet editor > Terrain Sets tab, you can set up terrains. Painted terrain tiles automatically connect — a wall next to another wall shows a joined texture. This is the 2D equivalent of GridMap's automatic mesh fitting. Essential for dungeon rooms that don't look hand-placed.
+
+**Accessing tiles from code:**
+```gdscript
+@onready var walls: TileMapLayer = $Walls
+
+func is_walkable(world_pos: Vector2) -> bool:
+    var tile_pos := walls.local_to_map(world_pos)
+    return walls.get_cell_source_id(tile_pos) == -1  # -1 = empty cell
+```
+
+### 2D Lighting: PointLight2D, CanvasModulate, and Normal Maps
+
+2D lighting is optional but dramatically improves atmosphere. This is a direct parallel to Section 4's lighting rig — same concepts, 2D nodes.
+
+**CanvasModulate** — the ambient light control:
+```
+CanvasModulate
+  ├── Color: Color(0.1, 0.05, 0.15, 1)   ← dark purple-black for dungeon ambience
+```
+This multiplies every pixel on the canvas by the color. Set it to near-black for a dark dungeon. Everything will be dark by default, with light coming from PointLight2D sources.
+
+**PointLight2D** — torch and lamp lights:
+```
+Torch (Node2D)
+├── Sprite2D              ← torch art
+└── PointLight2D
+    ├── Texture: (gradient PNG)  ← a radial gradient from white to transparent
+    ├── Energy: 1.5
+    ├── Height: 0
+    └── Color: Color(1, 0.7, 0.3, 1)   ← warm orange
+```
+
+The `Texture` on a PointLight2D controls the shape of the light. A radial gradient PNG (white center, transparent edge) gives a torch. You can make any light shape with custom textures.
+
+**Torch flicker (parallel to the 3D campfire script):**
+```gdscript
+# torch.gd
+extends Node2D
+
+@onready var light: PointLight2D = $PointLight2D
+
+@export var base_energy: float = 1.2
+@export var flicker_amount: float = 0.4
+@export var flicker_speed: float = 7.0
+
+var time: float = 0.0
+
+func _process(delta: float) -> void:
+    time += delta
+    var flicker := sin(time * flicker_speed) * 0.5
+    flicker += sin(time * flicker_speed * 1.7 + 0.5) * 0.3
+    flicker += sin(time * flicker_speed * 0.6 + 1.2) * 0.2
+    light.energy = base_energy + flicker * flicker_amount
+```
+
+**Normal maps on sprites for 2D lighting depth:**
+Without normal maps, PointLight2D lights sprites flatly — no depth, no bumps. Add a normal map and suddenly a stone wall has crevices that catch light. This is where your design skills make a huge difference.
+
+Assign a normal map using **CanvasTexture** (wraps a sprite's texture and adds a normal map slot):
+1. Select the Sprite2D > Texture property
+2. Change it to `New CanvasTexture`
+3. Set **Diffuse Texture** to your sprite PNG
+4. Set **Normal Texture** to your normal map PNG
+
+Tools for generating 2D normal maps:
+- **Laigter** (free, open source) — best for pixel art, generates from sprite automatically
+- **SpriteIlluminator** (paid) — fast, good quality
+- **Photoshop** — Filter > 3D > Generate Normal Map (for painted sprites)
+- **Hand-painted** — for pixel art, paint the normal map directly in a 3-channel PNG
+
+**LightOccluder2D** — cast shadows in 2D:
+Add a `LightOccluder2D` child to any node that should block light (walls, crates). Draw its polygon to match the sprite silhouette. The light stops at the occluder.
+
+### Parallax Backgrounds for Atmosphere
+
+**Parallax2D** (added in Godot 4.3, replacing the deprecated `ParallaxBackground`/`ParallaxLayer` nodes) creates the illusion of depth by scrolling its children at a different speed relative to the camera.
+
+For a top-down RPG, parallax is subtler than a side-scroller — use it for:
+- A faint texture on the floor that scrolls slightly slower than walls (depth of field feel)
+- A fog/mist overlay that drifts slowly regardless of movement
+- A sky or background visible through windows
+
+```
+DungeonRoom (Node2D)
+├── Parallax2D (fog)
+│   ├── Scroll Scale: Vector2(0.05, 0.05)  ← barely moves
+│   └── Sprite2D (fog texture, modulate alpha: 0.3)
+├── Parallax2D (distant floor detail)
+│   ├── Scroll Scale: Vector2(0.2, 0.2)    ← moves at 20% of camera speed
+│   └── Sprite2D (stone texture, modulate alpha: 0.15)
+├── TileMapLayer (Ground)                    ← moves 1:1 with camera (no parallax)
+└── TileMapLayer (Walls)
+```
+
+`Parallax2D` is simpler than the old two-node pattern — each layer is a single `Parallax2D` node with a `scroll_scale` property. Set `repeat_size` to tile the texture across the viewport.
+
+### CanvasItemMaterial vs StandardMaterial3D
+
+The 2D equivalent of `StandardMaterial3D` is **CanvasItemMaterial**, though it's much simpler:
+
+| 3D Concept | 2D Equivalent | Notes |
+|---|---|---|
+| `StandardMaterial3D` | `CanvasItemMaterial` | Controls blend mode and lighting mode |
+| `albedo_color` | `self_modulate` / `modulate` | Tint a node or its whole subtree |
+| `emission` | `PointLight2D` nearby | No built-in emission; use lights instead |
+| `roughness / metallic` | N/A | 2D lighting model doesn't use PBR |
+| `normal_map` | Normal texture on `CanvasTexture` | Affects how 2D lights shade the sprite |
+| `ShaderMaterial` (spatial) | `ShaderMaterial` (canvas_item) | Custom shaders — see Module 6's bridge |
+| `transparency` | `modulate.a` | Just set alpha on the node |
+
+`modulate` tints the node and all its children. `self_modulate` tints only that node. Both are Color properties, animatable via AnimationPlayer.
+
+### Try It: Build a Dungeon Room
+
+Using the character from Module 0's bridge and assets from Kenney Tiny Dungeon:
+
+1. Create a `Node2D` scene named `DungeonRoom`
+2. Add two **TileMapLayer** nodes: `Ground` and `Walls`
+3. Set up the TileSet from the Kenney tileset PNG (16×16 tiles)
+4. Paint a floor on `Ground`, paint walls on `Walls` with collision
+5. Add **CanvasModulate** with a dark color
+6. Place 3–4 **PointLight2D** torches with the flicker script
+7. Add a **Parallax2D** node with a faint atmospheric overlay
+8. Instance the Player scene from Module 0's bridge and drop it into the room
+
+The result: a lit, tiled dungeon room with a moving character. Module 4's bridge will upgrade the movement to proper physics, and Module 6's bridge will add shader effects on top.
+
+---
+
 ## API Quick Reference
 
 ### StandardMaterial3D

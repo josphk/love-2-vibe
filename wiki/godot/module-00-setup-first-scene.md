@@ -912,6 +912,110 @@ func _process(delta: float) -> void:
 
 ---
 
+## 2D Bridge: Your First 2D Scene
+
+> **Context shift.** Everything above uses 3D nodes. This section covers the 2D equivalents — same engine, same patterns, different coordinate system. The running example is a top-down action RPG (think Zelda meets Vampire Survivors). Each module's 2D bridge adds a new layer to the same project.
+
+### 3D to 2D: What Changes, What Stays
+
+The engine fundamentals don't change. `_ready()`, `_process(delta)`, `@export`, signals, the scene tree — all identical. Only the node types and coordinate system differ.
+
+| 3D Concept | 2D Equivalent | Notes |
+|---|---|---|
+| `Node3D` | `Node2D` | Base for all 2D objects |
+| `MeshInstance3D` | `Sprite2D` | Shows a texture instead of a mesh |
+| `Camera3D` | `Camera2D` | Much simpler — no FOV, just zoom |
+| `DirectionalLight3D` | `DirectionalLight2D` | Works with normal maps |
+| `OmniLight3D` | `PointLight2D` | Circular 2D light |
+| `Vector3` | `Vector2` | `x` and `y` only, no `z` |
+| `position.x / .z` | `position.x / .y` | Y is the depth axis in top-down |
+| `rotate_y()` | `rotation` (float) | Rotation is a single angle in 2D |
+| `_process(delta)` | `_process(delta)` | **Identical** |
+| `@export` | `@export` | **Identical** |
+
+**The biggest gotcha:** In 2D, the Y-axis points **down**. The origin (0, 0) is the top-left of the screen by default. A `position.y` of 500 means 500 pixels below the top. This flips from what you might expect if you're used to math coordinates.
+
+### The 2D Viewport
+
+In the top toolbar, there are two tabs: **2D** and **3D**. Click **2D** to switch the viewport. You'll see a flat canvas with a blue rectangle showing the game window bounds (set in Project Settings > Display > Window).
+
+The viewport shows pixel coordinates. The center of the screen at 1280×720 is at position `(640, 360)`.
+
+### Scene Tree for a Top-Down Room
+
+Here's the equivalent of the Module 0 solar system, but as a top-down RPG room:
+
+```
+Room (Node2D)                  ← scene root
+├── Background (Sprite2D)      ← room floor texture
+├── Player (Node2D)            ← player container
+│   ├── Sprite2D               ← character art
+│   └── Camera2D               ← follows the player
+└── Walls (StaticBody2D)       ← room boundaries (preview of Module 4)
+    └── CollisionShape2D
+```
+
+### Setting Up a Sprite2D
+
+1. Create a new scene. Set the root node to **Node2D** and name it `Room`.
+2. Add a **Sprite2D** child. In the Inspector, click the **Texture** property and drag a PNG from the FileSystem dock.
+3. The sprite appears centered at the origin. Move it with the Move tool (W) or set `position` directly.
+
+**Import settings matter.** When you import a PNG, Godot uses Linear filtering by default — fine for HD art, but pixel art will look blurry. For pixel art: select the texture in the FileSystem dock, go to the **Import** tab, set **Filter** to `Nearest`, click **Reimport**.
+
+| Art Style | Filter Setting | Mipmaps |
+|---|---|---|
+| Pixel art | Nearest | Off |
+| HD / painted | Linear | On |
+
+For a whole project, set the default in **Project Settings > Rendering > Textures > Default Texture Filter**.
+
+### Camera2D Basics
+
+Add a **Camera2D** as a child of your Player node. It automatically follows the parent. Key properties:
+
+```
+Camera2D
+├── Position Smoothing > Enabled: true    ← smooth follow
+├── Position Smoothing > Speed: 8.0       ← how fast it catches up
+├── Zoom: Vector2(2, 2)                   ← zoom in (pixel art looks better zoomed)
+└── Limit > Left/Right/Top/Bottom         ← clamp camera to room bounds
+```
+
+Compare to `Camera3D` from the 3D section — Camera2D is dramatically simpler. No FOV, no projection modes, no SpringArm. Just position smoothing and bounds.
+
+### Moving a Sprite with `_process(delta)`
+
+This mirrors the 3D section's approach — using `_process` directly on the node before introducing physics bodies (that comes in Module 4's bridge). Attach this to the Player's `Node2D`:
+
+```gdscript
+# scripts/player_simple.gd
+extends Node2D
+
+@export var speed: float = 200.0
+
+func _process(delta: float) -> void:
+    var input_dir := Input.get_vector("move_left", "move_right", "move_up", "move_down")
+    position += input_dir * speed * delta
+```
+
+Notice `speed` is `200.0` — much larger than the 3D equivalent (which used ~5 units/sec). In 2D, the coordinate system is in **pixels**, not meters. A typical room might be 1280×720 pixels. Moving 200 pixels per second feels natural; moving 5 pixels per second would be imperceptibly slow.
+
+The `Input.get_vector()` call is identical to the 3D version — it returns a normalized `Vector2` based on your four directional actions.
+
+### Try It: A Character in a Room
+
+1. Create a `Node2D` scene named `Room`
+2. Add a `Sprite2D` child — assign any PNG as texture (grab one from Kenney: [kenney.nl/assets](https://kenney.nl/assets))
+3. Add a `Node2D` child named `Player`
+4. Move the player script above onto `Player`
+5. Add a `Camera2D` as a child of `Player`, enable Position Smoothing
+6. Run with F5
+
+You have a moving character in a 2D scene. This is the 2D equivalent of the solar system toy — your first running 2D scene. The next bridge section (Module 3) will replace the plain background with a proper tiled dungeon room.
+
+---
+
 ## API Quick Reference
 
 ### Node3D
