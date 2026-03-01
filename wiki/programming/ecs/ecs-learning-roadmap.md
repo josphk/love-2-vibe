@@ -44,7 +44,7 @@ ECS isn't always better than OOP. For a small game with a clear hierarchy and no
 **Read:**
 - ECS FAQ by Sander Mertens — "Why use ECS?" section: https://github.com/SanderMertens/ecs-faq#why-use-ecs — the single best overview of ECS motivations, written by the creator of Flecs
 - "Component" chapter from Game Programming Patterns by Robert Nystrom: https://gameprogrammingpatterns.com/component.html — walks through exactly the OOP-to-composition evolution, with clear code examples
-- "Evolve Your Hierarchy" by Mick West: https://cowboyprogramming.com/2007/01/05/evolve-your-heirarchy/ — classic article on migrating from deep inheritance to components in a real game engine
+- "Evolve Your Hierarchy" by Mick West: https://cowboyprogramming.com/2007/01/05/evolve-your-heirachy/ — classic article on migrating from deep inheritance to components in a real game engine
 
 **Exercise:** Take a game you've built (or imagined) using OOP. Draw the class hierarchy. Now list every case where two unrelated classes need the same behavior (e.g., both Player and Fireball need Position and Velocity). How many of those shared behaviors exist? Could you express each entity as a bag of data components instead of a class? Write out what components each entity type would have.
 
