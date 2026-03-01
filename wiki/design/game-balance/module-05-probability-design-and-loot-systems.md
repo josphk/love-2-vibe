@@ -104,14 +104,13 @@ Rarity tiers serve two purposes: they communicate value to the player ("purple =
 
 ### Standard Tier Structure
 
-```
-Tier        Color     Budget Range    Drop Rate     Per-Run Expected
-Common      White     25-40           ~60%          8-12
-Uncommon    Green     40-60           ~25%          4-6
-Rare        Blue      60-85           ~12%          1-3
-Epic        Purple    85-120          ~3%           0-1
-Legendary   Gold      120-180         <1%           0-1 (not guaranteed)
-```
+| Tier      | Color  | Budget Range | Drop Rate | Per-Run Expected     |
+|-----------|--------|--------------|-----------|----------------------|
+| Common    | White  | 25-40        | ~60%      | 8-12                 |
+| Uncommon  | Green  | 40-60        | ~25%      | 4-6                  |
+| Rare      | Blue   | 60-85        | ~12%      | 1-3                  |
+| Epic      | Purple | 85-120       | ~3%       | 0-1                  |
+| Legendary | Gold   | 120-180      | <1%       | 0-1 (not guaranteed) |
 
 **The 3:2:1 ratio:** A common pattern is roughly 3 Commons per 2 Uncommons per 1 Rare. This means the player's inventory is mostly Common and Uncommon, with Rares as exciting upgrades. Epics and Legendaries are rare enough to be memorable.
 
@@ -383,17 +382,16 @@ Players are terrible at estimating probabilities. A 10% proc rate *feels* like i
 
 ### The Perception Table
 
-```
-Actual Rate    Player Perception         Design Implication
-1-5%           "Almost never"            Needs pity timer or it feels broken
-5-10%          "Rarely"                  Noticeable over many encounters
-10-20%         "Sometimes"               Feels like a real part of the kit
-20-30%         "Often"                   Player plans around it happening
-30-50%         "Most of the time"        Reliable enough to depend on
-50-70%         "Usually"                 More notable when it fails
-70-90%         "Almost always"           Failures feel like bugs
-90-99%         "Guaranteed" (in player's mind)  Failures cause rage
-```
+| Actual Rate | Player Perception              | Design Implication                     |
+|-------------|--------------------------------|----------------------------------------|
+| 1-5%        | "Almost never"                 | Needs pity timer or it feels broken    |
+| 5-10%       | "Rarely"                       | Noticeable over many encounters        |
+| 10-20%      | "Sometimes"                    | Feels like a real part of the kit      |
+| 20-30%      | "Often"                        | Player plans around it happening       |
+| 30-50%      | "Most of the time"             | Reliable enough to depend on           |
+| 50-70%      | "Usually"                      | More notable when it fails             |
+| 70-90%      | "Almost always"                | Failures feel like bugs                |
+| 90-99%      | "Guaranteed" (in player's mind) | Failures cause rage                    |
 
 ### Calibrating Rates for Intent
 

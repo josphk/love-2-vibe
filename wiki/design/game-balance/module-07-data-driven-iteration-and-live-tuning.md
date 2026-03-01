@@ -290,7 +290,6 @@ Build: "Fire Crit"
 
 Before shipping a balance patch, simulate all archetype builds with the proposed changes:
 
-```
 | Archetype    | Win Rate (pre) | Win Rate (post) | Change | Status    |
 |-------------|----------------|-----------------|--------|-----------|
 | Fire Crit   | 52%            | 48%             | -4%    | OK        |
@@ -298,7 +297,6 @@ Before shipping a balance patch, simulate all archetype builds with the proposed
 | Speed DoT   | 55%            | 42%             | -13%   | WARNING   |
 | Summoner    | 38%            | 35%             | -3%    | LOW (pre) |
 | Lifesteal   | 62%            | 51%             | -11%   | Intended  |
-```
 
 **Speed DoT dropped 13% — why?** The patch nerfed a generic "damage over time" upgrade. It was targeted at Lifesteal builds (which were dominant), but Speed DoT relied on it too. Solution: nerf the Lifesteal-specific interaction (lifesteal + DoT) rather than DoT generically.
 

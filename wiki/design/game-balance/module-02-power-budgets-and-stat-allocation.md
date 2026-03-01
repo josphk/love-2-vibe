@@ -267,14 +267,12 @@ Unlimited violations destroy balance. Rules for keeping violations exciting but 
 
 Every game with items needs a budget spreadsheet. Here's the structure:
 
-```
 | Item Name    | Tier      | Slot    | Attack | Crit% | Speed | HP  | Def | Off Budget | Def Budget | Over? |
 |-------------|-----------|---------|--------|-------|-------|-----|-----|-----------|-----------|-------|
 | Iron Sword  | Common    | Weapon  | 8      | 3     | —     | —   | —   | 32.6      | —         | No    |
 | Steel Sword | Uncommon  | Weapon  | 14     | 5     | 0.1   | —   | —   | 66.0      | —         | No    |
 | Fire Blade  | Rare      | Weapon  | 16     | 8     | 0.1   | —   | —   | 76.4      | —         | No    |
 | Excalibur   | Legendary | Weapon  | 25     | 15    | 0.3   | —   | —   | 135.2     | —         | Yes*  |
-```
 
 *Intentional violation: legendary with build-defining crit synergy.
 

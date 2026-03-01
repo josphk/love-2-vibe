@@ -503,7 +503,6 @@ The distinction is **player expectation**. *Mario Kart* players know items are c
 
 **The spectrum of rubber banding intensity:**
 
-```
 None         Light              Moderate          Heavy
 |------------|-----------------|-----------------|
 Sim racers   Comeback XP       Mario Kart items  Extreme
@@ -512,7 +511,6 @@ competitive  sports games      power-ups         where last
                                                  place gets
                                                  near-guaranteed
                                                  comeback tools
-```
 
 **The transparency question is critical.** *Mario Kart* is transparent about its rubber banding -- players can see the item distribution skew toward powerful items in last place. This works because the chaos is part of the fun. But a racing game that secretly speeds up AI cars when you're ahead is hiding its rubber banding, and discovery of this hidden mechanic always generates backlash. The rule of thumb: **if your rubber banding would make players angry if they knew about it, either make it transparent or remove it.** Hidden mechanics that feel unfair when discovered were unfair all along -- you just got away with it temporarily.
 

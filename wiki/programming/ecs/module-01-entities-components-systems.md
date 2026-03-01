@@ -20,14 +20,12 @@ By the end of this module you'll be able to hand-roll a functional ECS in Lua wi
 
 Forget objects for a moment. Imagine a spreadsheet. Rows are entities. Columns are component types. A cell contains data if that entity has that component; the cell is empty if it doesn't.
 
-```
 Entity  | Position      | Velocity    | Health | Sprite       | PlayerInput
 --------|---------------|-------------|--------|--------------|------------
 1       | {x=100,y=200} | {vx=0,vy=0} | {hp=3} | "player.png" | {}
 2       | {x=400,y=150} | {vx=-2,vy=0}| {hp=1} | "enemy.png"  |
 3       | {x=105,y=210} | {vx=5,vy=-3}|        | "bullet.png" |
 4       |               |             |        | "hud.png"    |
-```
 
 Entity 1 is the player: it has Position, Velocity, Health, Sprite, and PlayerInput (the flag that says "this entity is controlled by the player"). Entity 2 is an enemy: same columns except no PlayerInput. Entity 3 is a bullet: it has Position and Velocity but no Health (bullets don't take damage). Entity 4 is the HUD sprite: no Position in world space, no Velocity, no Health — just a Sprite.
 

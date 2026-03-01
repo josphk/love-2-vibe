@@ -214,7 +214,6 @@ Example archetypes for an action roguelike:
 
 4. **Compare build performance.**
 
-```
 | Build          | Room TTK | Boss TTK | Worst Case     | Win Rate* |
 |---------------|----------|----------|----------------|-----------|
 | Glass Cannon  | 1.5s     | 45s      | Multi-hit boss | ~60%      |
@@ -225,7 +224,6 @@ Example archetypes for an action roguelike:
 | Burst Mage    | 1.0s     | 50s      | Sustained DPS  | ~60%      |
 | Lifesteal     | 3.5s     | 90s      | One-shot spike | ~75%      |
 | Summoner      | 3.0s     | 80s      | AoE bosses     | ~50%      |
-```
 
 *Win rates are simulation estimates or playtest data.
 
@@ -392,7 +390,6 @@ With duplicate protection:
 
 Given 6 weapons with these stats:
 
-```
 | Weapon      | Attack | Crit% | Speed | Special          |
 |-------------|--------|-------|-------|------------------|
 | Iron Sword  | 30     | 5%    | 1.0   | —                |
@@ -401,7 +398,6 @@ Given 6 weapons with these stats:
 | War Hammer  | 60     | 0%    | 0.5   | —                |
 | Lucky Blade | 20     | 25%   | 1.2   | —                |
 | Dark Sword  | 35     | 8%    | 0.9   | —                |
-```
 
 1. Calculate the DPS of each weapon (crit multi = 2×)
 2. Does any weapon dominate another? (Better in every dimension including DPS)

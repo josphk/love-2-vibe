@@ -147,7 +147,6 @@ Time per level ∝ XP_required(n) / XP_income(n)
 
 Before finalizing your XP curve, build a level-duration table:
 
-```
 | Level | XP Required | XP/minute (estimated) | Minutes to Level | Cumulative Hours |
 |-------|-------------|----------------------|-----------------|-----------------|
 | 1→2   | 100         | 50                   | 2               | 0.03            |
@@ -155,7 +154,6 @@ Before finalizing your XP curve, build a level-duration table:
 | 10→11 | 1,585       | 120                  | 13              | 1.2             |
 | 20→21 | 5,480       | 200                  | 27              | 5.5             |
 | 50→51 | 25,704      | 500                  | 51              | 28              |
-```
 
 If level 50 takes 51 minutes and you expect players to reach level 50, that's fine. If your game expects players to reach level 200 and each level takes 3 hours, you've designed a game that requires 600+ hours. Is that intentional? The level-duration table forces you to answer this question before shipping.
 

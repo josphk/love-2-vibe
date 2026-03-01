@@ -341,7 +341,6 @@ In a 40-hour RPG, the player will earn vastly more resources at hour 30 than at 
 
 Let's trace how inflation kills an economy with actual numbers. Imagine a fantasy RPG with linear reward scaling but exponential cost scaling:
 
-```
 Level  | Gold per kill | Kills/hour | Gold/hour | Best weapon cost | Hours to buy
 -------|---------------|------------|-----------|------------------|-------------
   1    |      5        |    30      |    150    |       200        |    1.3 hrs
@@ -351,7 +350,6 @@ Level  | Gold per kill | Kills/hour | Gold/hour | Best weapon cost | Hours to bu
  30    |     90        |    30      |  2,700    |    50,000        |   18.5 hrs
  40    |    120        |    30      |  3,600    |   150,000        |   41.7 hrs
  50    |    150        |    30      |  4,500    |   500,000        |  111.1 hrs
-```
 
 The problem: Gold income scales linearly (+30 Gold/kill every 10 levels) but weapon costs scale exponentially. By level 50, the grind is 85x longer than it was at level 1. This is deflation by design mistake — the designer wanted big impressive numbers for late-game items but didn't scale income to match. The player experience at level 50 is miserable.
 
