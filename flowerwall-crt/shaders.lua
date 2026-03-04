@@ -19,10 +19,11 @@ local Shaders = {}
 Shaders.blur = [[
 extern vec2 step_dir;
 extern float radius;
+extern vec2 resolution;
 
 vec4 effect(vec4 color, Image tex, vec2 uv, vec2 screen_coords) {
     const float DEFAULT_RADIUS = 9.0;
-    vec2 s = radius / DEFAULT_RADIUS * step_dir / love_ScreenSize.zw;
+    vec2 s = radius / DEFAULT_RADIUS * step_dir / resolution;
     vec3 col =
         0.012425302 * Texel(tex, uv - 9.000000000 * s).rgb +
         0.046287410 * Texel(tex, uv - 7.408451530 * s).rgb +

@@ -2,34 +2,35 @@
 
 local Pipeline = {}
 
-local INTERNAL_W = 640
-local INTERNAL_H = 480
-local BLOOM_W = 320
-local BLOOM_H = 240
-
-Pipeline.INTERNAL_W = INTERNAL_W
-Pipeline.INTERNAL_H = INTERNAL_H
 Pipeline.enabled = true
 Pipeline.params = {}
 
 local scene, blurA, blurB, crtOut, bloomA, bloomB
 local blurShader, crtShader, thresholdShader, bloomShader
 local noiseTexture
+local canvasW, canvasH, bloomW, bloomH
 
-function Pipeline.init(shaders, noise, presets)
-    scene  = love.graphics.newCanvas(INTERNAL_W, INTERNAL_H)
-    blurA  = love.graphics.newCanvas(INTERNAL_W, INTERNAL_H)
-    blurB  = love.graphics.newCanvas(INTERNAL_W, INTERNAL_H)
-    crtOut = love.graphics.newCanvas(INTERNAL_W, INTERNAL_H)
-    bloomA = love.graphics.newCanvas(BLOOM_W, BLOOM_H)
-    bloomB = love.graphics.newCanvas(BLOOM_W, BLOOM_H)
+local function createCanvases(w, h)
+    canvasW, canvasH = w, h
+    bloomW = math.floor(w / 2)
+    bloomH = math.floor(h / 2)
 
-    scene:setFilter("nearest", "nearest")
+    scene  = love.graphics.newCanvas(w, h)
+    blurA  = love.graphics.newCanvas(w, h)
+    blurB  = love.graphics.newCanvas(w, h)
+    crtOut = love.graphics.newCanvas(w, h)
+    bloomA = love.graphics.newCanvas(bloomW, bloomH)
+    bloomB = love.graphics.newCanvas(bloomW, bloomH)
+
     blurA:setFilter("linear", "linear")
     blurB:setFilter("linear", "linear")
     crtOut:setFilter("linear", "linear")
     bloomA:setFilter("linear", "linear")
     bloomB:setFilter("linear", "linear")
+end
+
+function Pipeline.init(shaders, noise, presets)
+    createCanvases(love.graphics.getDimensions())
 
     blurShader      = love.graphics.newShader(shaders.blur)
     crtShader       = love.graphics.newShader(shaders.crt)
@@ -37,12 +38,17 @@ function Pipeline.init(shaders, noise, presets)
     bloomShader     = love.graphics.newShader(shaders.bloom)
 
     noiseTexture = noise
-
-    -- Static uniforms
     crtShader:send("noise_texture", noiseTexture)
-    bloomShader:send("bloom_resolution", {BLOOM_W, BLOOM_H})
 
     Pipeline.applyPreset(presets[1])
+end
+
+function Pipeline.resize(w, h)
+    createCanvases(w, h)
+end
+
+function Pipeline.getDimensions()
+    return canvasW, canvasH
 end
 
 function Pipeline.applyPreset(preset)
@@ -54,6 +60,7 @@ end
 local function sendParams()
     local p = Pipeline.params
 
+    blurShader:send("resolution", {canvasW, canvasH})
     blurShader:send("radius", p.blur_radius)
 
     crtShader:send("time", love.timer.getTime())
@@ -75,6 +82,7 @@ local function sendParams()
     crtShader:send("wiggle",           p.wiggle)
 
     thresholdShader:send("threshold", p.bloom_threshold)
+    bloomShader:send("bloom_resolution", {bloomW, bloomH})
 end
 
 function Pipeline.beginDraw()
@@ -85,16 +93,9 @@ end
 function Pipeline.endDraw()
     love.graphics.setCanvas()
 
-    local screenW, screenH = love.graphics.getDimensions()
-    local scaleX = screenW / INTERNAL_W
-    local scaleY = screenH / INTERNAL_H
-    local scale  = math.min(scaleX, scaleY)
-    local ox = (screenW - INTERNAL_W * scale) / 2
-    local oy = (screenH - INTERNAL_H * scale) / 2
-
     if not Pipeline.enabled then
         love.graphics.setColor(1, 1, 1, 1)
-        love.graphics.draw(scene, ox, oy, 0, scale, scale)
+        love.graphics.draw(scene)
         return
     end
 
@@ -127,7 +128,7 @@ function Pipeline.endDraw()
     love.graphics.setCanvas(bloomA)
     love.graphics.clear(0, 0, 0, 1)
     love.graphics.setShader(thresholdShader)
-    love.graphics.draw(crtOut, 0, 0, 0, BLOOM_W / INTERNAL_W, BLOOM_H / INTERNAL_H)
+    love.graphics.draw(crtOut, 0, 0, 0, bloomW / canvasW, bloomH / canvasH)
     love.graphics.setShader()
 
     -- Pass 3b: Bloom blur (bloomA → bloomB)
@@ -141,14 +142,14 @@ function Pipeline.endDraw()
 
     -- Final composite to screen
     love.graphics.setColor(1, 1, 1, 1)
-    love.graphics.draw(crtOut, ox, oy, 0, scale, scale)
+    love.graphics.draw(crtOut)
 
     -- Additive bloom overlay
     love.graphics.setBlendMode("add")
     love.graphics.setColor(1, 1, 1, Pipeline.params.bloom_intensity)
-    love.graphics.draw(bloomB, ox, oy, 0,
-        scale * INTERNAL_W / BLOOM_W,
-        scale * INTERNAL_H / BLOOM_H)
+    love.graphics.draw(bloomB, 0, 0, 0,
+        canvasW / bloomW,
+        canvasH / bloomH)
     love.graphics.setBlendMode("alpha")
     love.graphics.setColor(1, 1, 1, 1)
 end

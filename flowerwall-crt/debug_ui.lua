@@ -15,6 +15,7 @@ local SLIDER_H = 14
 local BTN_H   = 28
 
 local dragging = nil  -- index into controls list
+local ui_font = nil
 
 -- Ordered list of parameter controls built once at init
 local controls = {}
@@ -75,6 +76,7 @@ end
 function DebugUI.init(pipeline, presets)
     pipeline_ref = pipeline
     presets_ref  = presets
+    ui_font = love.graphics.newFont(11)
 end
 
 function DebugUI.toggle()
@@ -130,7 +132,9 @@ function DebugUI.draw()
 
     local sw, sh = love.graphics.getDimensions()
     local px = panelX()
-    local font = love.graphics.getFont()
+    local prevFont = love.graphics.getFont()
+    love.graphics.setFont(ui_font)
+    local font = ui_font
 
     -- Panel background
     love.graphics.setColor(0, 0, 0, 0.82)
@@ -248,6 +252,7 @@ function DebugUI.draw()
     end
 
     love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.setFont(prevFont)
 end
 
 function DebugUI.mousepressed(x, y, button)
