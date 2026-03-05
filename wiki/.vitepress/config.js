@@ -46,6 +46,7 @@ export default defineConfig({
           { text: 'Game Design Theory', link: '/design/game-design-theory/game-design-theory-roadmap' },
           { text: 'Game Balance', link: '/design/game-balance/game-balance-roadmap' },
           { text: 'Game AI', link: '/design/game-ai/game-ai-learning-roadmap' },
+          { text: 'Game Design Domain Map', link: '/design/game-design-domain-map/game-design-domain-map' },
         ],
       },
       {

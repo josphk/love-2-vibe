@@ -78,6 +78,7 @@ const topics = {
   'design/game-design-theory': 'Game Design Theory',
   'design/game-balance': 'Game Balance',
   'design/game-ai': 'Game AI',
+  'design/game-design-domain-map': 'Game Design Domain Map',
   'art-audio/rive': 'Rive',
   'art-audio/sound-design': 'Sound Design',
   'business/indie-marketing': 'Indie Marketing',
