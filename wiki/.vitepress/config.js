@@ -38,6 +38,7 @@ export default defineConfig({
           { text: 'ECS', link: '/programming/ecs/ecs-learning-roadmap' },
           { text: 'GLSL Shaders', link: '/programming/glsl/glsl-learning-roadmap' },
           { text: 'Gameplay Ability System', link: '/programming/gas/gas-learning-roadmap' },
+          { text: 'Game Programming Domain Map', link: '/programming/game-programming-domain-map/game-programming-domain-map' },
         ],
       },
       {
@@ -54,6 +55,8 @@ export default defineConfig({
         items: [
           { text: 'Rive', link: '/art-audio/rive/rive-learning-roadmap' },
           { text: 'Sound Design', link: '/art-audio/sound-design/sound-design-learning-roadmap' },
+          { text: 'Game Art Domain Map', link: '/art-audio/game-art-domain-map/game-art-domain-map' },
+          { text: 'Game Audio Domain Map', link: '/art-audio/game-audio-domain-map/game-audio-domain-map' },
         ],
       },
       {
