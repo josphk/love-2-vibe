@@ -39,6 +39,7 @@ export default defineConfig({
           { text: 'GLSL Shaders', link: '/programming/glsl/glsl-learning-roadmap' },
           { text: 'Gameplay Ability System', link: '/programming/gas/gas-learning-roadmap' },
           { text: 'Game Programming Domain Map', link: '/programming/game-programming-domain-map/game-programming-domain-map' },
+          { text: 'Multiplayer Networking Domain Map', link: '/programming/multiplayer-networking-domain-map/multiplayer-networking-domain-map' },
         ],
       },
       {

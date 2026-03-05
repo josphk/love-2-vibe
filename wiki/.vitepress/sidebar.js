@@ -76,6 +76,7 @@ const topics = {
   'programming/glsl': 'GLSL Shaders',
   'programming/gas': 'Gameplay Ability System',
   'programming/game-programming-domain-map': 'Game Programming Domain Map',
+  'programming/multiplayer-networking-domain-map': 'Multiplayer Networking Domain Map',
   'design/game-design-theory': 'Game Design Theory',
   'design/game-balance': 'Game Balance',
   'design/game-ai': 'Game AI',
