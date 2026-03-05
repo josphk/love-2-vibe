@@ -64,6 +64,7 @@ export default defineConfig({
         items: [
           { text: 'Indie Marketing', link: '/business/indie-marketing/indie-marketing-learning-roadmap' },
           { text: 'Monetization', link: '/business/monetization/game-monetization-learning-roadmap' },
+          { text: 'Game Business Domain Map', link: '/business/game-business-domain-map/game-business-domain-map' },
         ],
       },
       {

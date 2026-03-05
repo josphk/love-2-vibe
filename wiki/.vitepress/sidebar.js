@@ -86,6 +86,7 @@ const topics = {
   'art-audio/game-audio-domain-map': 'Game Audio Domain Map',
   'business/indie-marketing': 'Indie Marketing',
   'business/monetization': 'Monetization',
+  'business/game-business-domain-map': 'Game Business Domain Map',
   'resources/awesome-love2d': 'Awesome LOVE2D',
   'resources/awesome-gamedev': 'Awesome Gamedev',
 }
