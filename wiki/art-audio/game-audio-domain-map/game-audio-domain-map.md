@@ -271,6 +271,19 @@ Placing sounds in space and simulating how they travel.
 - **Sound Cone** — A directional emission pattern for a sound source. A megaphone has a narrow cone (loud in front, quiet behind). A speaker has a wider cone. Shapes how sound radiates from its source.
   *"Define a narrow sound cone for the NPC's voice so the player must face them to hear dialogue clearly, with 12 dB drop-off outside the cone."*
 
+- **Listener** — The virtual microphone in the game world, usually attached to the camera or player character. All spatialization is calculated relative to the listener's position and orientation.
+  *"Should the audio listener be on the camera or the player character? Compare the tradeoffs for a third-person game with a wide camera offset."*
+
+- **Spread** — How wide a sound source appears in the stereo or surround field. A point source has zero spread. A nearby waterfall should have wide spread, filling both ears as you stand next to it.
+  *"Increase the spread parameter on the river ambient emitter so it feels like it surrounds the player when they're standing on the bridge."*
+
+- **Near-Field Effect** — Exaggerated low-frequency boost when a sound source is very close to the listener. The proximity effect. Makes nearby sounds feel physically present and intimate.
+  *"Apply a near-field bass boost to the companion's whispered lines when the player leans in close during stealth sections."*
+
+- **Ambisonics** — A full-sphere surround sound format that captures or encodes audio from all directions. Used in VR and 360 video. Decoded to whatever speaker or headphone layout the player has.
+  *"Record ambisonic room tones at each key location so the VR player gets accurate environmental audio that rotates with their head."*
+  [Visual reference](https://www.google.com/search?tbm=isch&q=ambisonics+spherical+audio+format+diagram)
+
 ### Environmental Audio
 
 Sounds that define the world itself — spaces, weather, and atmosphere.
@@ -306,6 +319,21 @@ Sounds that define the world itself — spaces, weather, and atmosphere.
 - **Impulse Response (IR)** — A recording of a space's acoustic character captured by playing a known signal (like a starter pistol or sine sweep) and recording the result. Used in convolution reverb to clone real spaces.
   *"Capture impulse responses from a parking garage, a church, and a tiled bathroom to use as reverb presets for different game environments."*
   [Visual reference](https://www.google.com/search?tbm=isch&q=impulse+response+recording+convolution+reverb)
+
+- **Audio Zone** — A trigger volume in the game world that changes audio behavior when the player enters. Switches reverb presets, ambient beds, music states, or mix snapshots.
+  *"Place audio zones at each doorway in the dungeon so reverb, ambience, and music shift as the player moves between rooms."*
+
+- **Emitter** — A point in the game world that produces sound. Attached to objects, characters, or fixed positions. The emitter's location drives spatialization, attenuation, and occlusion calculations.
+  *"Attach audio emitters to each torch in the dungeon so the player hears crackling fire positioned accurately in 3D space."*
+
+- **Underwater Audio** — The distinctive sound filtering that occurs when the listener or source is submerged. Heavy low-pass filtering, reduced high frequencies, muffled quality, and altered propagation speed.
+  *"Apply a low-pass filter at 800 Hz and reduce reverb pre-delay when the player dives underwater, then crossfade back to normal over 200ms on surfacing."*
+
+- **Wind Audio** — Dynamic sound layers driven by wind speed and direction. Interacts with environment geometry — whistling through gaps, howling over ridges, rustling foliage.
+  *"Build a wind system with three layers: constant base drone, gusting mid-frequency layer, and high-frequency whistling tied to narrow geometry like window frames."*
+
+- **Foliage Audio** — Sounds triggered by movement through vegetation. Grass rustling, branches snapping, leaves crunching. Often driven by the player's speed and the vegetation type.
+  *"Trigger foliage audio based on player speed: gentle swishing at walking pace, loud rustling when running, and branch snaps when sprinting through dense brush."*
 
 ---
 
@@ -348,6 +376,21 @@ The software layer between raw audio assets and the game engine.
 - **Audio Codec** — The format used to compress audio files. Vorbis (OGG) and Opus for general audio, ADPCM for low-latency SFX, PCM (WAV) for uncompressed quality. Each trades size against quality and decode speed.
   *"Choose codecs for different asset types: WAV for short UI clicks (low latency), Vorbis for music (good compression), and ADPCM for frequently triggered SFX."*
 
+- **Streaming** — Loading and decoding audio from disk in real time rather than holding the entire file in memory. Essential for music and long ambiences. Short SFX are better pre-loaded.
+  *"Stream music and ambient loops from disk to save RAM, but pre-load all weapon and UI sounds into memory for zero-latency playback."*
+
+- **Memory Budget** — The RAM allocation reserved for audio assets. On consoles it's tight — a 2 GB title might budget 100-200 MB for audio. Every loaded sound bank counts against it.
+  *"Calculate the audio memory budget: 50 MB for always-loaded sounds, 30 MB per level bank, and 20 MB reserved for streaming buffers."*
+
+- **Audio Thread** — A dedicated CPU thread that handles audio mixing and processing, separate from the game logic thread. Keeps audio smooth even when gameplay hitches.
+  *"Profile the audio thread — it's spiking to 4ms during combat. Which sounds are the most expensive to process?"*
+
+- **Latency** — The delay between a game event and the sound reaching the player's ears. Input latency for player actions should be under 20ms. High latency makes controls feel disconnected.
+  *"Measure audio latency from button press to sound output — target under 15ms for player weapon sounds to maintain responsive feel."*
+
+- **Object Pool** — A pre-allocated set of audio voice objects that get reused rather than created and destroyed per sound. Avoids memory allocation during gameplay, which can cause hitches.
+  *"Pre-allocate a pool of 64 audio voices at level load. When a sound triggers, grab a free voice from the pool instead of allocating one."*
+
 ### Mixing & Routing
 
 Controlling how sounds combine, compete, and reach the speakers.
@@ -382,6 +425,18 @@ Controlling how sounds combine, compete, and reach the speakers.
 
 - **Compression** — Reducing the dynamic range of audio by attenuating loud parts and/or boosting quiet parts. Makes sounds more consistent in volume and helps them cut through a busy mix.
   *"Apply gentle compression to the dialogue bus (4:1 ratio, -18 dB threshold) so whispered and shouted lines sit at similar perceived volumes."*
+
+- **Send/Return** — Routing a copy of a signal to a shared effects bus (send) and blending the processed result back (return). Lets multiple sounds share one reverb instance instead of each running their own.
+  *"Route all footstep sounds to a shared reverb send bus so they use one reverb instance, saving DSP. Adjust send levels per surface material."*
+
+- **EQ (Equalization)** — Boosting or cutting specific frequency ranges. High-pass to remove rumble, notch to kill resonances, shelf to add brightness. The most fundamental mixing tool.
+  *"Apply a high-pass filter at 80 Hz on the dialogue bus to remove low-frequency rumble, and a gentle 3 kHz boost for intelligibility."*
+
+- **Aux Bus** — An auxiliary mixing bus used for effects processing, sub-grouping, or parallel routing. Send signals to aux buses for shared reverb, delay, or group compression.
+  *"Create an aux bus for 'outdoor reverb' and route all exterior sound emitters to it, so switching from indoors to outdoors only requires changing the aux bus effect."*
+
+- **Fade Curve** — The shape of a volume fade (linear, logarithmic, exponential, S-curve). Linear fades sound unnatural. Logarithmic fades match human perception. The curve shape matters more than the duration.
+  *"Use a logarithmic fade curve for music crossfades — linear fades have an audible dip in the middle where both tracks are at 50%."*
 
 ---
 
@@ -423,6 +478,21 @@ Recording, directing, and processing voice performances.
 - **Mouth Noise** — Unwanted clicks, pops, and saliva sounds in voice recordings. Common on close-mic'd sessions. Removed manually or with specialized de-click plugins.
   *"The VO has excessive mouth noise on sibilant consonants — use a de-click plugin with conservative settings, then manually edit what remains."*
 
+- **De-esser** — A frequency-specific compressor that tames harsh sibilance (s, sh, ch sounds) in voice recordings. Prevents piercing high frequencies without dulling the overall vocal tone.
+  *"Apply a de-esser targeting 5-8 kHz on the narrator's VO — the sibilance is harsh on headphones but the voice should stay bright and present."*
+
+- **Noise Gate** — A processor that silences audio below a set threshold. Cuts room noise and bleed between spoken lines. Must be set carefully — too aggressive and it clips the start of quiet words.
+  *"Set a noise gate on the VO channel at -40 dB with a 5ms attack to eliminate room noise between lines without cutting off soft word beginnings."*
+
+- **Session Script** — The formatted document actors read from during recording, including line IDs, character names, emotional direction, pronunciation guides, and context notes.
+  *"Format the session script with line ID, character, emotional beat, and context for each line. Group by scene so the actor can stay in character."*
+
+- **Reference Track** — A previously recorded line or existing audio used as a benchmark for performance matching. Ensures consistency when recording across multiple sessions or with replacement actors.
+  *"Provide the reference track from Session 1 so the actor can match the energy and pacing for the pickup lines recorded three months later."*
+
+- **Scratch VO** — Temporary voice recordings used during development before final VO is recorded. Often performed by team members. Placeholders that establish timing, tone, and pacing.
+  *"Record scratch VO for the tutorial dialogue so the team can test timing and triggers while waiting for the professional recording session."*
+
 ### Dialogue Systems
 
 How spoken lines are triggered, managed, and played in-engine.
@@ -458,3 +528,16 @@ How spoken lines are triggered, managed, and played in-engine.
 
 - **Voice Line Database** — A structured catalog of all recorded lines with metadata: character, emotion, context, duration, file path, and localization status. The organizational backbone of VO production.
   *"Design a voice line database schema with fields for character ID, emotion tag, script line, audio file path, duration, approval status, and localization keys."*
+
+- **Interrupt Behavior** — How the system handles a new voice line when one is already playing. Options: queue it, cut the current line, blend between them, or drop the new one. Different situations need different rules.
+  *"Set interrupt rules: story dialogue queues behind active lines, combat barks cut ambient chatter immediately, and the player's own barks never get interrupted."*
+
+- **Contextual Dialogue** — Lines that change based on game state, history, or environment. The NPC greets you differently if you've completed their quest, if it's raining, or if you're wearing their faction's armor.
+  *"Implement contextual dialogue for the innkeeper: different greetings based on time of day, player reputation, and whether they've rented a room before."*
+
+- **Chatter System** — Ambient NPC conversations that play in the background to make the world feel alive. Guards discussing rumors, merchants haggling, children playing. Triggered by proximity and randomized.
+  *"Build a chatter system for the town square: pairs of NPCs play randomized 2-3 line conversations when the player passes within earshot, with 30-second cooldowns."*
+
+- **Phoneme** — The smallest unit of speech sound. Each spoken word is a sequence of phonemes. Lip sync systems map audio to phonemes to drive mouth animation.
+  *"Extract phoneme data from the recorded dialogue using forced alignment so the lip sync system can map each sound to the correct mouth shape."*
+  [Visual reference](https://www.google.com/search?tbm=isch&q=phoneme+chart+speech+sounds+IPA)
